@@ -1,0 +1,1912 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>คลังชุดข้อสอบ — แบบทดสอบก่อนเรียน สังคมและวัฒนธรรม</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    /* ตั้งค่าฟอนต์ภาษาไทยและฟอนต์ Inter เพื่อการอ่านที่ชัดเจนบนทุกหน้าจอ */
+    body {
+      font-family: "Noto Sans Thai", "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    .option-card {
+      transition: transform 0.12s ease, background-color 0.15s ease, border-color 0.15s ease;
+    }
+    .option-card:active {
+      transform: scale(0.99);
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-800 antialiased selection:bg-indigo-100 selection:text-indigo-900">
+  <!-- แถบแจ้งเตือนสถานะแบบ Toast (หลีกเลี่ยง alert/confirm) -->
+  <div id="toast-banner" class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 hidden max-w-[92vw] w-fit px-4 py-3 rounded-2xl bg-slate-900 text-white text-sm font-medium shadow-lg border border-slate-700/80 flex items-center gap-2.5">
+    <span id="toast-dot" class="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0"></span>
+    <span id="toast-message">พร้อมใช้งาน</span>
+  </div>
+
+  <!-- ส่วนหัวหลักของระบบคลังชุดข้อสอบ -->
+  <header class="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <div class="min-w-0">
+        <div class="inline-flex flex-wrap items-center gap-2 mb-1">
+          <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
+            คลังชุดข้อสอบส่วนตัว (ไม่ต้องพึ่งเซิร์ฟเวอร์)
+          </span>
+          <span id="active-set-badge" class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 truncate max-w-[260px]">
+            ชุดที่ 1: แบบทดสอบก่อนเรียน — สังคมและวัฒนธรรม
+          </span>
+        </div>
+        <h1 id="quiz-title-display" class="text-lg sm:text-xl font-bold text-slate-900 truncate">
+          แบบทดสอบก่อนเรียน — สังคมและวัฒนธรรม
+        </h1>
+        <p id="quiz-subtitle-display" class="text-xs sm:text-sm text-slate-500">
+          10 ข้อ • 4 ตัวเลือก (ก, ข, ค, ง) • ตรวจคำตอบและกดแสดงเฉลยแยกอิสระได้
+        </p>
+      </div>
+
+      <!-- ปุ่มควบคุมหลัก -->
+      <div class="flex flex-wrap items-center gap-2">
+        <button
+          id="btn-submit-quiz"
+          type="button"
+          class="px-3.5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm cursor-pointer"
+        >
+          ตรวจคำตอบ
+        </button>
+        <button
+          id="btn-reveal-header"
+          type="button"
+          class="px-3.5 py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 text-sm font-semibold border border-amber-200 cursor-pointer"
+        >
+          แสดงเฉลย
+        </button>
+        <button
+          id="btn-reset-quiz"
+          type="button"
+          class="px-3.5 py-2.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 text-sm font-medium border border-slate-300 cursor-pointer"
+        >
+          ทำใหม่
+        </button>
+        <button
+          id="btn-export-html"
+          type="button"
+          class="px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-sm cursor-pointer"
+        >
+          Export Standalone HTML
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- พื้นที่หลัก 2 คอลัมน์: ซ้าย = เลือกหน่วยและก่อนเรียน/หลังเรียน + คลังชุดข้อสอบ | ขวา = ข้อสอบแต่ละข้อ -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <!-- คอลัมน์ซ้าย: ตัวเลือกหน่วย + ก่อนเรียน/หลังเรียน + คลังชุดข้อสอบ (Saved Quiz Sets) -->
+      <div class="lg:col-span-5 xl:col-span-4 space-y-6 lg:sticky lg:top-24">
+        <!-- ส่วนเลือกหน่วยและโหมดก่อนเรียน / หลังเรียน -->
+        <section id="unit-mode-selector-section" class="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs space-y-3.5">
+          <div class="flex items-start justify-between gap-2 border-b border-slate-100 pb-3">
+            <div>
+              <h2 class="text-base sm:text-lg font-bold text-slate-900">เลือกหน่วยและแบบทดสอบ</h2>
+              <p class="text-xs text-slate-500 mt-0.5">
+                แบ่งเป็นหน่วยๆ เลือก "ก่อนเรียน" หรือ "หลังเรียน" เพื่อเปิดทำข้อสอบทางขวา
+              </p>
+            </div>
+            <span id="unit-count-badge" class="shrink-0 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
+              1 หน่วย
+            </span>
+          </div>
+
+          <div id="unit-selector-list" class="space-y-2.5 max-h-80 overflow-y-auto pr-1"></div>
+        </section>
+
+        <!-- ส่วนคลังชุดข้อสอบ (Saved Quiz Sets) -->
+        <section id="quiz-bank-section" class="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-xs space-y-5">
+          <div class="flex flex-col gap-3 border-b border-slate-100 pb-4">
+            <div>
+              <h2 class="text-base sm:text-lg font-bold text-slate-900">คลังชุดข้อสอบ (Saved Quiz Sets)</h2>
+              <p id="storage-status-note" class="text-xs sm:text-sm text-slate-500">
+                บันทึกชุดข้อสอบแยกตามชื่อ เลือกเริ่มทำได้ทันที หรือส่งออกเป็นไฟล์ HTML พกพาไปเปิดบน iPhone/iPad
+              </p>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+              <!-- ปุ่มโหลดไฟล์ .json ทีละหลายไฟล์พร้อมกันจากเครื่อง -->
+              <label
+                for="json-file-input"
+                class="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs sm:text-sm font-semibold border border-slate-300 cursor-pointer inline-flex items-center gap-1.5"
+              >
+                <span>โหลดไฟล์ .json (หลายไฟล์)</span>
+              </label>
+              <input id="json-file-input" type="file" accept=".json,application/json" multiple class="hidden" />
+
+              <!-- ปุ่มเปิด/ปิดกล่องแก้ไข JSON -->
+              <button
+                id="btn-toggle-json-panel"
+                type="button"
+                class="px-3.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs sm:text-sm font-semibold border border-amber-200 cursor-pointer"
+              >
+                วาง / แก้ไข JSON
+              </button>
+            </div>
+          </div>
+
+          <!-- แถบบันทึกชุดข้อสอบปัจจุบันหรือชุดใหม่ลงคลังพร้อมตั้งชื่อ -->
+          <div class="bg-slate-50/90 rounded-2xl border border-slate-200/90 p-3.5 sm:p-4 space-y-3">
+            <div class="space-y-3">
+              <div>
+                <label for="set-name-input" class="block text-xs font-semibold text-slate-700 mb-1">
+                  ชื่อชุดข้อสอบในคลัง
+                </label>
+                <input
+                  id="set-name-input"
+                  type="text"
+                  placeholder="เช่น ชุดที่ 1: สังคมและวัฒนธรรม"
+                  class="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div class="flex flex-wrap items-center gap-2">
+                <button
+                  id="btn-save-new-set"
+                  type="button"
+                  class="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-semibold cursor-pointer"
+                >
+                  บันทึกเป็นชุดใหม่
+                </button>
+                <button
+                  id="btn-update-current-set"
+                  type="button"
+                  class="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-800 text-xs sm:text-sm font-semibold border border-slate-300 cursor-pointer"
+                >
+                  อัปเดตชุดที่เลือกอยู่
+                </button>
+                <button
+                  id="btn-export-active-json"
+                  type="button"
+                  class="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 text-xs sm:text-sm font-medium border border-slate-300 cursor-pointer"
+                >
+                  ดาวน์โหลด .json
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- กล่องแก้ไขหรือวางข้อมูล JSON แบบพับเก็บได้ -->
+          <div id="json-editor-panel" class="hidden rounded-2xl border border-amber-200 bg-amber-50/40 p-4 space-y-3">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div>
+                <h3 class="text-sm sm:text-base font-bold text-slate-900">วางหรือแก้ไขข้อมูล JSON ชุดข้อสอบ</h3>
+                <p class="text-xs text-slate-600">
+                  ต้องมี <code class="px-1 rounded bg-white border border-amber-200">title</code> และ <code class="px-1 rounded bg-white border border-amber-200">questions</code> ที่มี 4 ตัวเลือก (<code class="px-1 rounded bg-white border border-amber-200">ก</code>, <code class="px-1 rounded bg-white border border-amber-200">ข</code>, <code class="px-1 rounded bg-white border border-amber-200">ค</code>, <code class="px-1 rounded bg-white border border-amber-200">ง</code>) และเฉลย <code class="px-1 rounded bg-white border border-amber-200">answer</code>
+                </p>
+              </div>
+              <button
+                id="btn-format-json"
+                type="button"
+                class="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 text-xs font-medium border border-slate-300 self-start sm:self-auto cursor-pointer"
+              >
+                จัดระเบียบ JSON
+              </button>
+            </div>
+
+            <textarea
+              id="json-textarea"
+              rows="11"
+              spellcheck="false"
+              class="w-full rounded-xl border border-slate-300 bg-white p-3 text-xs sm:text-sm font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            ></textarea>
+
+            <div id="json-error-box" class="hidden rounded-xl bg-rose-50 border border-rose-200 px-3.5 py-2.5 text-xs sm:text-sm text-rose-700"></div>
+
+            <div class="flex flex-wrap items-center gap-2">
+              <button
+                id="btn-apply-json-quiz"
+                type="button"
+                class="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-semibold cursor-pointer"
+              >
+                นำ JSON มาทำข้อสอบ
+              </button>
+              <button
+                id="btn-save-json-as-named-set"
+                type="button"
+                class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-semibold cursor-pointer"
+              >
+                บันทึก JSON นี้ลงคลังตามชื่อด้านบน
+              </button>
+            </div>
+          </div>
+
+          <!-- รายการชุดข้อสอบที่บันทึกไว้ในคลัง -->
+          <div class="space-y-2.5">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold uppercase tracking-wider text-slate-500">
+                ชุดข้อสอบที่บันทึกไว้ (<span id="saved-sets-count">1</span> ชุด)
+              </span>
+            </div>
+            <div id="saved-sets-list" class="grid grid-cols-1 gap-3"></div>
+          </div>
+        </section>
+      </div>
+
+      <!-- คอลัมน์ขวา: แถบความคืบหน้า/คะแนน + ตัวข้อแต่ละข้อ + กล่องสรุปคะแนนท้ายชุด -->
+      <div class="lg:col-span-7 xl:col-span-8 space-y-6">
+        <!-- แถบสรุปความคืบหน้าและคะแนนของชุดที่กำลังทำ -->
+        <section class="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+            <div class="flex flex-wrap items-center gap-3">
+              <span class="text-sm font-semibold text-slate-700">
+                ตอบแล้ว: <span id="answered-count" class="text-indigo-600 font-bold">0</span> / <span id="total-count">10</span> ข้อ
+              </span>
+              <span id="score-badge" class="hidden px-3 py-1 rounded-full text-xs sm:text-sm font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                คะแนน: 0 / 10
+              </span>
+              <span id="reveal-mode-hint" class="hidden text-xs font-medium text-indigo-700 bg-indigo-50 border border-indigo-100 px-2.5 py-1 rounded-full">
+                ตรวจแล้ว • ยังไม่เฉลยข้อที่ถูก (กด "แสดงเฉลย" เพื่อดูเฉลย)
+              </span>
+            </div>
+
+            <button
+              id="btn-toggle-review"
+              type="button"
+              class="px-3 py-1.5 rounded-xl text-xs sm:text-sm font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 self-start sm:self-auto cursor-pointer"
+            >
+              แสดงเฉลย
+            </button>
+          </div>
+
+          <div class="w-full h-2.5 rounded-full bg-slate-100 overflow-hidden">
+            <div id="progress-bar" class="h-full w-0 bg-indigo-600 rounded-full transition-all duration-300"></div>
+          </div>
+        </section>
+
+        <!-- รายการคำถามของชุดที่กำลังทำ -->
+        <section id="questions-container" class="space-y-4"></section>
+
+        <!-- กล่องสรุปคะแนนท้ายชุดข้อสอบ -->
+        <section id="result-summary-card" class="hidden bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-wide text-indigo-600">สรุปผลการทำแบบทดสอบ</p>
+              <h2 id="summary-score-text" class="text-2xl font-bold text-slate-900 mt-1">ได้ 0 / 10 คะแนน</h2>
+              <p id="summary-detail-text" class="text-sm text-slate-600 mt-1">สามารถกดปุ่ม "แสดงเฉลย" เพื่อตรวจสอบข้อที่ถูกต้องได้</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2.5">
+              <button
+                id="btn-show-answers-bottom"
+                type="button"
+                class="px-4 py-2.5 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-950 text-sm font-semibold border border-amber-300 cursor-pointer"
+              >
+                แสดงเฉลย
+              </button>
+              <button
+                id="btn-retry-bottom"
+                type="button"
+                class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-sm font-semibold cursor-pointer"
+              >
+                ทำแบบทดสอบอีกครั้ง
+              </button>
+              <button
+                id="btn-export-bottom"
+                type="button"
+                class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold cursor-pointer"
+              >
+                Export Standalone HTML
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <!-- ข้อมูลเริ่มต้นที่ฝังไว้ในไฟล์ HTML (ใช้โหลดเข้าคลังเริ่มต้นอัตโนมัติ) -->
+  <script id="embedded-quiz-data" type="application/json">
+{
+  "title": "แบบทดสอบก่อนเรียน — สังคมและวัฒนธรรม",
+  "questions": [
+    {
+      "id": 1,
+      "question": "ข้อใดมีความสอดคล้องกับสิ่งที่เรียกว่า “สังคม” มากที่สุด",
+      "options": {
+        "ก": "ผู้คนที่มีความคิดความเชื่อต่างๆ ซึ่งเป็นไปในทิศทางเดียวกัน",
+        "ข": "การอยู่ร่วมกันของคนที่มีความผูกพันต่อกัน มีแบบแผนร่วมกัน",
+        "ค": "การอยู่ร่วมกันของคนตั้งแต่สองคนขึ้นไป ไม่ว่าจะในสถานที่ใดก็ตาม",
+        "ง": "จินตนาการของคนที่มีต่อสิ่งใดสิ่งหนึ่งร่วมกัน ในช่วงเวลาใดเวลาหนึ่ง"
+      },
+      "answer": "ข"
+    },
+    {
+      "id": 2,
+      "question": "ข้อใดมีความสอดคล้องกับสิ่งที่เรียกว่า “วัฒนธรรม” มากที่สุด",
+      "options": {
+        "ก": "เป็นมาตรวัดความเจริญของในแต่ละสังคม",
+        "ข": "เป็นสิ่งสร้างขึ้นสำหรับการอยู่ร่วมกันในสังคม",
+        "ค": "เป็นสิ่งที่คนในสังคมต้องปฏิบัติตามอย่างเคร่งครัด",
+        "ง": "เป็นสิ่งที่เป็นตัวแทนของความดี ความงามในสังคม"
+      },
+      "answer": "ข"
+    },
+    {
+      "id": 3,
+      "question": "ข้อใดมีลักษณะเป็นสังคมและวัฒนธรรมซึ่งชัดเจนที่สุด",
+      "options": {
+        "ก": "องค์การอนามัยโลก",
+        "ข": "กลุ่มผู้ประกอบการที่ใช้แรงงานต่างด้าว",
+        "ค": "กลุ่มแรงงานเมียนมาในจังหวัดสมุทรสาคร",
+        "ง": "ชุมนุมสหกรณ์ออมทรัพย์แห่งประเทศไทย"
+      },
+      "answer": "ค"
+    },
+    {
+      "id": 4,
+      "question": "การทำความเข้าใจสังคมที่อยู่ในแต่ละที่นั้น นอกจากจะต้องรู้เรื่องของจำนวนแล้ว สิ่งที่จำเป็นต้องรู้เกี่ยวกับคนเพิ่มคือเรื่องใด",
+      "options": {
+        "ก": "ระดับของรายได้",
+        "ข": "ความเป็นธรรมในสังคม",
+        "ค": "สภาพแวดล้อมทางธรรมชาติ",
+        "ง": "ประเภทและความสัมพันธ์ของคน"
+      },
+      "answer": "ง"
+    },
+    {
+      "id": 5,
+      "question": "ข้อใดแสดงให้เห็นถึงความสำคัญของสภาพทางภูมิศาสตร์ซึ่งมีผลต่อการทำความเข้าใจสังคมและวัฒนธรรมซึ่งอยู่ในแต่ละพื้นที่ ได้อย่างชัดเจนที่สุด",
+      "options": {
+        "ก": "ความคิดความเชื่อเกี่ยวกับอำนาจของสิ่งที่อยู่เหนือธรรมชาติ",
+        "ข": "การปรับตัวของมนุษย์เพื่อให้เอื้อต่อการดำเนินวิถีชีวิตในถิ่นที่อยู่",
+        "ค": "ความเติบโตทางเศรษฐกิจที่เป็นผลมาจากการพัฒนาทรัพยากรมนุษย์",
+        "ง": "การสร้างกลไกการควบคุมทางสังคมเพื่อให้คนอยู่ร่วมกันได้อย่างมีความสุข"
+      },
+      "answer": "ข"
+    },
+    {
+      "id": 6,
+      "question": "ข้อใดเป็นอุปกรณ์ซึ่งมีความสำคัญที่สุดซึ่งเอื้อต่อการดำรงชีวิตอยู่ร่วมกันของผู้คนที่มีความแตกต่างหลากหลาย",
+      "options": {
+        "ก": "ปัจจัยสี่",
+        "ข": "ประชาธิปไตย",
+        "ค": "รายได้ที่แน่นอน",
+        "ง": "การจัดระเบียบทางสังคม"
+      },
+      "answer": "ง"
+    },
+    {
+      "id": 7,
+      "question": "ข้อใดกล่าวไม่ถูกต้องเกี่ยวกับสังคม/วัฒนธรรมสากลกับสังคม/วัฒนธรรมที่มีชื่อเฉพาะ",
+      "options": {
+        "ก": "มีความสัมพันธ์กับบริบทของในแต่ละพื้นที่",
+        "ข": "เป็นสิ่งที่ไม่สามารถกำหนดขอบเขตได้อย่างแน่นอน",
+        "ค": "สามารถอธิบายปรากฏการณ์ต่างๆ ในทุกสังคมทั่วโลก",
+        "ง": "สะท้อนให้เห็นถึงมโนทัศน์เกี่ยวกับความสัมพันธ์ในเชิงอำนาจ"
+      },
+      "answer": "ค"
+    },
+    {
+      "id": 8,
+      "question": "ข้อใดมีความสัมพันธ์โดยตรงกับวัฒนธรรมประจำชาติในบริบทของสังคมไทย",
+      "options": {
+        "ก": "สภาพแวดล้อมทางภูมิศาสตร์",
+        "ข": "ความคิดสร้างสรรค์ของมนุษย์",
+        "ค": "กระบวนการสร้างความเป็นไทย",
+        "ง": "กิจกรรมการค้าทางทะเลที่เกิดขึ้นในอดีต"
+      },
+      "answer": "ค"
+    },
+    {
+      "id": 9,
+      "question": "ข้อใดกล่าวถึงความสัมพันธ์ของประวัติศาสตร์กับสภาพทางภูมิศาสตร์ในบริบทของพื้นที่ซึ่งเรียกว่ารัฐชาติไทยในทุกวันนี้ ได้ถูกต้องที่สุด",
+      "options": {
+        "ก": "ความเสื่อมโทรมทางภูมิศาสตร์มีความสัมพันธ์กับมิติของเวลาในทางประวัติศาสตร์",
+        "ข": "ความเสื่อมโทรมในทางประวัติศาสตร์เป็นผลมาจากการเปลี่ยนแปลงทางภูมิศาสตร์",
+        "ค": "ประวัติศาสตร์เป็นเรื่องของเวลา แต่ภูมิศาสตร์เป็นเรื่องของพื้นที่ จึงไม่มีความสัมพันธ์กัน",
+        "ง": "ความเสื่อมโทรมทางภูมิศาสตร์เป็นสิ่งที่ควบคู่กันไปกับความเสื่อมโทรมทางประวัติศาสตร์"
+      },
+      "answer": "ก"
+    },
+    {
+      "id": 10,
+      "question": "“อุปกรณ์และวิธีการในการที่สังคมหนึ่งๆ จะสามารถดึงเอาประโยชน์จากทรัพยากรที่มีอยู่ เพื่อให้เกิดประโยชน์ในการดำเนินวิถีชีวิต” ข้อความในข้างต้นนี้มีความสอดคล้องกับตัวเลือกในข้อใดมากที่สุด",
+      "options": {
+        "ก": "ปรัชญา",
+        "ข": "ความเชื่อ",
+        "ค": "วัฒนธรรม",
+        "ง": "อุดมการณ์"
+      },
+      "answer": "ค"
+    }
+  ]
+}
+  </script>
+
+  <script>
+    (function () {
+      const OPTION_KEYS = ["ก", "ข", "ค", "ง"];
+      const STORAGE_KEY = "thai_quiz_bank_sets_v1";
+      const PRIOR_QUIZ_STORAGE_KEYS = [
+        "thai_quiz_bank_sets_v1",
+        "thai_quiz_bank_sets_v2",
+        "thai_quiz_bank_sets",
+        "thai_quiz_sets",
+        "thai_quiz_units_catalog_v3",
+        "standalone_thai_quiz_sets"
+      ];
+
+      // ตัวจัดเก็บข้อมูลสำรองในหน่วยความจำกรณีเบราว์เซอร์จำกัดหรือปิด localStorage
+      let memoryBankStore = null;
+      let localStorageAvailable = true;
+
+      // แสดงแถบแจ้งเตือนสถานะแบบ Toast แทน alert()
+      let toastTimer = null;
+      function showToast(message, isError = false) {
+        const banner = document.getElementById("toast-banner");
+        const msgEl = document.getElementById("toast-message");
+        const dotEl = document.getElementById("toast-dot");
+        if (!banner || !msgEl || !dotEl) return;
+
+        msgEl.textContent = message;
+        dotEl.className = "w-2.5 h-2.5 rounded-full shrink-0 " + (isError ? "bg-rose-400" : "bg-emerald-400");
+        banner.classList.remove("hidden");
+
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => {
+          banner.classList.add("hidden");
+        }, 3200);
+      }
+
+      // คัดลอกอ็อบเจกต์แบบลึก (deep clone) อย่างปลอดภัย
+      function cloneData(obj) {
+        if (typeof structuredClone === "function") {
+          return structuredClone(obj);
+        }
+        return JSON.parse(JSON.stringify(obj));
+      }
+
+      // สร้างรหัสชุดข้อสอบแบบไม่ซ้ำ
+      function generateSetId() {
+        return "set_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 7);
+      }
+
+      // แปลงเลขไทยและเลขอารบิกเป็นตัวเลขจำนวนเต็มเพื่อเรียงลำดับหน่วยได้ถูกต้อง
+      function parseThaiOrArabicNumber(rawToken) {
+        const mapDigits = {
+          "๐": "0", "๑": "1", "๒": "2", "๓": "3", "๔": "4",
+          "๕": "5", "๖": "6", "๗": "7", "๘": "8", "๙": "9"
+        };
+        const converted = String(rawToken || "").replace(/[๐-๙]/g, (ch) => mapDigits[ch] || ch);
+        const parsed = parseInt(converted, 10);
+        return Number.isNaN(parsed) ? 999999 : parsed;
+      }
+
+      // ตรวจสอบว่าเป็นชุดทดสอบก่อนเรียนหรือหลังเรียนจากชื่อชุดหรือ title
+      function detectExamMode(text) {
+        const str = String(text || "");
+        if (/หลังเรียน/.test(str)) return "post";
+        if (/ก่อนเรียน/.test(str)) return "pre";
+        return "other";
+      }
+
+      // แยกข้อมูลหน่วยการเรียนจากชื่อชุดหรือ title
+      function parseUnitInfo(setItem) {
+        const combined = `${setItem?.name || ""} ${setItem?.quiz?.title || ""}`.trim();
+        const match = combined.match(/หน่วยที่\s*([๐-๙0-9]+)/);
+        if (match) {
+          const numToken = match[1];
+          const unitNum = parseThaiOrArabicNumber(numToken);
+          const unitLabel = `หน่วยที่ ${numToken}`;
+          const restText = combined.slice(combined.indexOf(match[0]) + match[0].length);
+          const topic = restText
+            .replace(/^[\s—–\-:]+/, "")
+            .replace(/แบบประเมินผลตนเอง(ก่อนเรียน|หลังเรียน)?/g, "")
+            .replace(/(ก่อนเรียน|หลังเรียน)/g, "")
+            .trim();
+          return {
+            unitKey: `unit_${unitNum}`,
+            unitLabel,
+            unitNum,
+            topic: topic || (setItem?.quiz?.title || setItem?.name || "")
+          };
+        }
+
+        const cleaned = (setItem?.name || setItem?.quiz?.title || "ชุดข้อสอบทั่วไป")
+          .replace(/^ชุดที่\s*[๐-๙0-9]+\s*[:：\-—]?\s*/, "")
+          .replace(/แบบทดสอบ(ก่อนเรียน|หลังเรียน)\s*[:：\-—]?\s*/g, "")
+          .replace(/(ก่อนเรียน|หลังเรียน)/g, "")
+          .trim() || "ชุดข้อสอบทั่วไป";
+
+        return {
+          unitKey: `custom_${cleaned.toLowerCase()}`,
+          unitLabel: cleaned,
+          unitNum: 999999,
+          topic: setItem?.quiz?.title || setItem?.name || cleaned
+        };
+      }
+
+      // สร้างคีย์เทียบเนื้อหาชุดข้อสอบเพื่อผสานรายการโดยไม่ทำข้อมูลที่อัปโหลดไปแล้วสูญหาย
+      function buildSetContentKey(setObj) {
+        const qList = Array.isArray(setObj?.quiz?.questions) ? setObj.quiz.questions : [];
+        const qSig = qList
+          .map((q) => `${String(q.question || "").trim()}||${String(q.answer || "").trim()}`)
+          .join("##");
+        return `${String(setObj?.quiz?.title || "").trim().toLowerCase()}::${qSig}`;
+      }
+
+      // ผสานรายการชุดข้อสอบโดยเก็บชุดที่มีอยู่เดิมไว้อย่างครบถ้วน
+      function mergeSetsSafely(existingSets, incomingSets) {
+        const merged = [];
+        const byId = new Map();
+        const byContent = new Map();
+
+        const insertSet = (entry) => {
+          if (!entry || typeof entry !== "object") return;
+          try {
+            const validQuiz = validateQuizData(entry.quiz);
+            const item = {
+              id: typeof entry.id === "string" && entry.id.trim() ? entry.id.trim() : generateSetId(),
+              name: typeof entry.name === "string" && entry.name.trim() ? entry.name.trim() : validQuiz.title,
+              quiz: cloneData(validQuiz),
+              updatedAt: typeof entry.updatedAt === "number" ? entry.updatedAt : Date.now()
+            };
+            const contentKey = buildSetContentKey(item);
+
+            if (byId.has(item.id)) {
+              const idx = byId.get(item.id);
+              if (item.updatedAt >= merged[idx].updatedAt) {
+                merged[idx] = item;
+                if (contentKey) byContent.set(contentKey, idx);
+              }
+              return;
+            }
+
+            if (contentKey && byContent.has(contentKey)) {
+              const idx = byContent.get(contentKey);
+              if (item.updatedAt > merged[idx].updatedAt) {
+                merged[idx] = { ...item, id: merged[idx].id };
+                byId.set(merged[idx].id, idx);
+              }
+              return;
+            }
+
+            const newIdx = merged.length;
+            merged.push(item);
+            byId.set(item.id, newIdx);
+            if (contentKey) byContent.set(contentKey, newIdx);
+          } catch (_) {
+            // ข้ามรายการที่รูปแบบไม่ถูกต้อง
+          }
+        };
+
+        (existingSets || []).forEach(insertSet);
+        (incomingSets || []).forEach(insertSet);
+
+        return merged;
+      }
+
+      // แปลงข้อมูลจากคีย์ localStorage หลากหลายรูปแบบให้เป็นรายการชุดข้อสอบ
+      function extractCandidateSets(parsedVal) {
+        if (!parsedVal) return [];
+        const list = [];
+
+        if (Array.isArray(parsedVal)) {
+          parsedVal.forEach((entry) => {
+            if (!entry || typeof entry !== "object") return;
+            if (entry.quiz) {
+              list.push(entry);
+            } else if (Array.isArray(entry.questions)) {
+              list.push({
+                id: generateSetId(),
+                name: entry.setName || entry.title || "ชุดข้อสอบ",
+                quiz: entry,
+                updatedAt: Date.now()
+              });
+            }
+          });
+          return list;
+        }
+
+        if (typeof parsedVal === "object") {
+          if (Array.isArray(parsedVal.sets)) {
+            list.push(...extractCandidateSets(parsedVal.sets));
+          }
+          if (parsedVal.slots && typeof parsedVal.slots === "object") {
+            Object.values(parsedVal.slots).forEach((slotObj) => {
+              if (slotObj && Array.isArray(slotObj.questions)) {
+                list.push({
+                  id: generateSetId(),
+                  name: slotObj.title || "ชุดข้อสอบ",
+                  quiz: slotObj,
+                  updatedAt: Date.now()
+                });
+              }
+            });
+          }
+          if (Array.isArray(parsedVal.questions)) {
+            list.push({
+              id: generateSetId(),
+              name: parsedVal.setName || parsedVal.title || "ชุดข้อสอบ",
+              quiz: parsedVal,
+              updatedAt: Date.now()
+            });
+          }
+        }
+        return list;
+      }
+
+      // อ่านข้อมูลชุดข้อสอบเริ่มต้นจากแท็ก embedded-quiz-data
+      function readEmbeddedQuizData() {
+        const scriptEl = document.getElementById("embedded-quiz-data");
+        if (!scriptEl) {
+          throw new Error("ไม่พบข้อมูลชุดข้อสอบเริ่มต้นในหน้าเว็บ");
+        }
+        return validateQuizData(JSON.parse(scriptEl.textContent));
+      }
+
+      // ตรวจสอบและปรับมาตรฐานข้อมูลชุดข้อสอบ JSON
+      function validateQuizData(raw) {
+        if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+          throw new Error("โครงสร้าง JSON ต้องเป็นอ็อบเจกต์ที่มีฟิลด์ title และ questions");
+        }
+        const title = typeof raw.title === "string" && raw.title.trim() ? raw.title.trim() : "แบบทดสอบชุดใหม่";
+        if (!Array.isArray(raw.questions) || raw.questions.length === 0) {
+          throw new Error("ฟิลด์ questions ต้องเป็นอาเรย์ที่มีคำถามอย่างน้อย 1 ข้อ");
+        }
+
+        const normalizedQuestions = raw.questions.map((item, idx) => {
+          if (!item || typeof item !== "object") {
+            throw new Error(`ข้อที่ ${idx + 1} ไม่ใช่รูปแบบอ็อบเจกต์ที่ถูกต้อง`);
+          }
+          const qText = typeof item.question === "string" ? item.question.trim() : "";
+          if (!qText) {
+            throw new Error(`ข้อที่ ${idx + 1} ขาดข้อความคำถาม (question)`);
+          }
+          if (!item.options || typeof item.options !== "object") {
+            throw new Error(`ข้อที่ ${idx + 1} ขาดตัวเลือก (options)`);
+          }
+
+          const cleanOptions = {};
+          for (const key of OPTION_KEYS) {
+            const val = item.options[key];
+            if (typeof val !== "string" || !val.trim()) {
+              throw new Error(`ข้อที่ ${idx + 1} ต้องมีตัวเลือก "${key}" ครบทั้ง 4 ตัวเลือก (ก, ข, ค, ง)`);
+            }
+            cleanOptions[key] = val.trim();
+          }
+
+          const ans = typeof item.answer === "string" ? item.answer.trim() : "";
+          if (!OPTION_KEYS.includes(ans)) {
+            throw new Error(`ข้อที่ ${idx + 1} มีเฉลย (answer) ไม่ถูกต้อง ต้องเป็น ก, ข, ค หรือ ง เท่านั้น`);
+          }
+
+          return {
+            id: item.id !== undefined ? item.id : idx + 1,
+            question: qText,
+            options: cleanOptions,
+            answer: ans,
+            explanation: typeof item.explanation === "string" ? item.explanation.trim() : ""
+          };
+        });
+
+        return {
+          title,
+          questions: normalizedQuestions
+        };
+      }
+
+      const defaultQuizData = readEmbeddedQuizData();
+      const defaultInitialSet = {
+        id: "default_social_culture_set_1",
+        name: "ชุดที่ 1: สังคมและวัฒนธรรม",
+        quiz: cloneData(defaultQuizData),
+        updatedAt: Date.now()
+      };
+
+      // โหลดรายการชุดข้อสอบจาก localStorage (รวมคีย์ที่เคยใช้ก่อนหน้า) และผสานโดยไม่ให้หาย
+      function loadBankFromStorage() {
+        let collected = [];
+        try {
+          const keysToInspect = new Set(PRIOR_QUIZ_STORAGE_KEYS);
+          try {
+            for (let i = 0; i < window.localStorage.length; i += 1) {
+              const k = window.localStorage.key(i);
+              if (k && (/quiz/i.test(k) || /ข้อสอบ/.test(k))) {
+                keysToInspect.add(k);
+              }
+            }
+          } catch (_) {}
+
+          keysToInspect.forEach((keyName) => {
+            try {
+              const raw = window.localStorage.getItem(keyName);
+              if (!raw) return;
+              const parsed = JSON.parse(raw);
+              const extracted = extractCandidateSets(parsed);
+              if (extracted.length > 0) {
+                collected = mergeSetsSafely(collected, extracted);
+              }
+            } catch (_) {
+              // ข้ามคีย์ที่ไม่ใช่ข้อมูลชุดข้อสอบ
+            }
+          });
+
+          if (collected.length > 0) {
+            return collected;
+          }
+          return [cloneData(defaultInitialSet)];
+        } catch (err) {
+          localStorageAvailable = false;
+          if (Array.isArray(memoryBankStore) && memoryBankStore.length > 0) {
+            return mergeSetsSafely([cloneData(defaultInitialSet)], memoryBankStore);
+          }
+          return [cloneData(defaultInitialSet)];
+        }
+      }
+
+      // บันทึกรายการชุดข้อสอบลง localStorage พร้อมผสานข้อมูลที่มีอยู่เดิมเสมอ
+      function persistBankToStorage(sets) {
+        const memSnapshot = Array.isArray(memoryBankStore) ? memoryBankStore : [];
+        let existingStorageSets = [];
+        try {
+          const rawExisting = window.localStorage.getItem(STORAGE_KEY);
+          if (rawExisting) {
+            existingStorageSets = extractCandidateSets(JSON.parse(rawExisting));
+          }
+        } catch (_) {}
+
+        const combined = mergeSetsSafely(
+          mergeSetsSafely(existingStorageSets, memSnapshot),
+          sets || []
+        );
+        const safeSets = combined.length > 0 ? combined : [cloneData(defaultInitialSet)];
+
+        memoryBankStore = cloneData(safeSets);
+        state.savedSets = cloneData(safeSets);
+
+        try {
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(safeSets));
+          localStorageAvailable = true;
+        } catch (_) {
+          localStorageAvailable = false;
+        }
+        updateStorageStatusNote();
+      }
+
+      function updateStorageStatusNote() {
+        const noteEl = document.getElementById("storage-status-note");
+        if (!noteEl) return;
+        if (localStorageAvailable) {
+          noteEl.textContent = "บันทึกชุดข้อสอบแยกตามชื่ออัตโนมัติในเบราว์เซอร์ (localStorage) รักษาชุดที่อัปโหลดไว้ทั้งหมด";
+        } else {
+          noteEl.textContent = "โหมดสำรองในหน่วยความจำ (เบราว์เซอร์จำกัด localStorage) — แนะนำให้กด Export Standalone HTML หรือดาวน์โหลด .json เพื่อเก็บไฟล์ถาวร";
+        }
+      }
+
+      // สถานะหลักของแอปพลิเคชัน
+      const initialSets = loadBankFromStorage();
+      const initialUnit = parseUnitInfo(initialSets[0]);
+      const state = {
+        savedSets: initialSets,
+        activeSetId: initialSets[0].id,
+        selectedUnitKey: initialUnit.unitKey,
+        quizData: cloneData(initialSets[0].quiz),
+        userAnswers: {},
+        submitted: false,       // ตรวจคำตอบแล้ว (บอกถูก/ผิดและคะแนนรวม แต่ยังไม่เฉลยว่าข้อไหนถูก)
+        showAllReview: false,   // แสดงเฉลยข้อที่ถูกต้องทั้งหมด เฉพาะเมื่อกด "แสดงเฉลย"
+        renamingSetId: null
+      };
+
+      // บันทึกรายการเริ่มต้นลงคลังทันทีหากยังไม่เคยมี
+      persistBankToStorage(state.savedSets);
+
+      function findActiveSet() {
+        return state.savedSets.find((s) => s.id === state.activeSetId) || null;
+      }
+
+      function getQuestionKey(question, index) {
+        if (question && (typeof question.id === "number" || typeof question.id === "string") && String(question.id).trim() !== "") {
+          return `${index}__${String(question.id)}`;
+        }
+        return `${index}`;
+      }
+
+      function calculateScore() {
+        const questions = state.quizData.questions || [];
+        let answeredCount = 0;
+        let correctCount = 0;
+
+        questions.forEach((q, idx) => {
+          const key = getQuestionKey(q, idx);
+          const picked = state.userAnswers[key];
+          if (picked) {
+            answeredCount += 1;
+            if (picked === q.answer) {
+              correctCount += 1;
+            }
+          }
+        });
+
+        return {
+          answeredCount,
+          correctCount,
+          totalCount: questions.length
+        };
+      }
+
+      // สร้างชื่อไฟล์ที่ปลอดภัยสำหรับดาวน์โหลด
+      function buildSafeFilename(rawName, fallbackName) {
+        const clean = String(rawName || "")
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9ก-๙]+/gi, "_")
+          .replace(/^_+|_+$/g, "");
+        return clean || fallbackName;
+      }
+
+      // ดาวน์โหลดไฟล์ .json ของชุดข้อสอบ
+      function downloadJsonFile(quizPayload, customSetName) {
+        try {
+          const valid = validateQuizData(quizPayload);
+          const exportObj = {
+            setName: (customSetName || valid.title).trim(),
+            ...valid
+          };
+          const jsonStr = JSON.stringify(exportObj, null, 2);
+          const blob = new Blob([jsonStr], { type: "application/json;charset=utf-8" });
+          const url = URL.createObjectURL(blob);
+          const baseName = buildSafeFilename(customSetName || valid.title, "quiz_set");
+
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = `${baseName}.json`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          setTimeout(() => URL.revokeObjectURL(url), 1500);
+          showToast(`ดาวน์โหลดไฟล์ ${baseName}.json เรียบร้อยแล้ว`);
+        } catch (err) {
+          showToast(`ดาวน์โหลด .json ไม่สำเร็จ: ${err.message}`, true);
+        }
+      }
+
+      // ส่งออกไฟล์ HTML เดี่ยวแบบ Standalone สำหรับเปิดใช้งานบน Mac / iPhone / iPad โดยไม่ต้องมีเซิร์ฟเวอร์
+      function downloadStandaloneHtml(quizPayload, customSetName) {
+        try {
+          const validPayload = validateQuizData(quizPayload);
+          const finalTitle = (customSetName && customSetName.trim()) ? customSetName.trim() : validPayload.title;
+          const payloadWithTitle = {
+            title: finalTitle,
+            questions: validPayload.questions
+          };
+
+          const safeJson = JSON.stringify(payloadWithTitle, null, 2).replace(/<\/script>/gi, "<\\/script>");
+          const parser = new DOMParser();
+          const docClone = parser.parseFromString(document.documentElement.outerHTML, "text/html");
+
+          const titleTag = docClone.querySelector("title");
+          if (titleTag) {
+            titleTag.textContent = finalTitle;
+          }
+
+          const embeddedScript = docClone.getElementById("embedded-quiz-data");
+          if (embeddedScript) {
+            embeddedScript.textContent = `\n${safeJson}\n  `;
+          }
+
+          // ฝังรายการชุดข้อสอบทั้งหมดในคลังลงในไฟล์ Standalone HTML ที่ส่งออกด้วย
+          const exportedBankScript = docClone.createElement("script");
+          exportedBankScript.id = "embedded-quiz-bank-sets";
+          exportedBankScript.type = "application/json";
+          exportedBankScript.textContent = `\n${JSON.stringify(state.savedSets, null, 2).replace(/<\/script>/gi, "<\\/script>")}\n  `;
+          docClone.body.appendChild(exportedBankScript);
+
+          // รีเซ็ตสถานะคะแนนและกล่องแก้ไขในไฟล์ที่ส่งออกเพื่อให้เปิดทำข้อสอบใหม่ได้ทันที
+          const exportedSummary = docClone.getElementById("result-summary-card");
+          if (exportedSummary) exportedSummary.classList.add("hidden");
+          const exportedScoreBadge = docClone.getElementById("score-badge");
+          if (exportedScoreBadge) exportedScoreBadge.classList.add("hidden");
+          const exportedRevealHint = docClone.getElementById("reveal-mode-hint");
+          if (exportedRevealHint) exportedRevealHint.classList.add("hidden");
+          const exportedJsonPanel = docClone.getElementById("json-editor-panel");
+          if (exportedJsonPanel) exportedJsonPanel.classList.add("hidden");
+
+          const finalHtml = "<!DOCTYPE html>\n" + docClone.documentElement.outerHTML;
+          const blob = new Blob([finalHtml], { type: "text/html;charset=utf-8" });
+          const url = URL.createObjectURL(blob);
+          const slug = buildSafeFilename(finalTitle, "standalone_quiz");
+
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = `${slug}.html`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          setTimeout(() => URL.revokeObjectURL(url), 1500);
+
+          showToast(`ส่งออกไฟล์ ${slug}.html เรียบร้อยแล้ว`);
+        } catch (err) {
+          showToast(`ส่งออกไฟล์ HTML ไม่สำเร็จ: ${err.message}`, true);
+        }
+      }
+
+      // เริ่มทำชุดข้อสอบที่เลือกทันที
+      function startQuizSet(setId) {
+        const target = state.savedSets.find((s) => s.id === setId);
+        if (!target) {
+          showToast("ไม่พบชุดข้อสอบที่ต้องการเปิด", true);
+          return;
+        }
+        state.activeSetId = target.id;
+        state.selectedUnitKey = parseUnitInfo(target).unitKey;
+        state.quizData = cloneData(target.quiz);
+        state.userAnswers = {};
+        state.submitted = false;
+        state.showAllReview = false;
+        state.renamingSetId = null;
+
+        const nameInput = document.getElementById("set-name-input");
+        if (nameInput) {
+          nameInput.value = target.name;
+        }
+
+        syncTextareaFromState();
+        renderUnitSelector();
+        renderSavedSetsBank();
+        renderQuestions();
+        updateHeaderStats();
+        showToast(`เริ่มทำชุด "${target.name}" (${target.quiz.questions.length} ข้อ)`);
+      }
+
+      // บันทึกชุดข้อสอบปัจจุบันเป็นชุดใหม่ในคลัง
+      function saveAsNewSet(customName, customQuizData) {
+        try {
+          const validQuiz = validateQuizData(customQuizData || state.quizData);
+          const trimmedName = (customName || "").trim() || validQuiz.title;
+          const newSet = {
+            id: generateSetId(),
+            name: trimmedName,
+            quiz: cloneData(validQuiz),
+            updatedAt: Date.now()
+          };
+          state.savedSets = mergeSetsSafely(state.savedSets, [newSet]);
+          state.activeSetId = newSet.id;
+          state.selectedUnitKey = parseUnitInfo(newSet).unitKey;
+          state.quizData = cloneData(validQuiz);
+          persistBankToStorage(state.savedSets);
+          renderUnitSelector();
+          renderSavedSetsBank();
+          updateHeaderStats();
+          showToast(`บันทึก "${trimmedName}" เป็นชุดใหม่ในคลังแล้ว`);
+        } catch (err) {
+          showToast(`บันทึกชุดใหม่ไม่สำเร็จ: ${err.message}`, true);
+        }
+      }
+
+      // อัปเดตชุดข้อสอบที่กำลังเลือกอยู่ในคลัง
+      function updateActiveSetInBank(customName, customQuizData) {
+        try {
+          const validQuiz = validateQuizData(customQuizData || state.quizData);
+          const current = findActiveSet();
+          if (!current) {
+            saveAsNewSet(customName, validQuiz);
+            return;
+          }
+          const trimmedName = (customName || "").trim() || current.name || validQuiz.title;
+          current.name = trimmedName;
+          current.quiz = cloneData(validQuiz);
+          current.updatedAt = Date.now();
+          state.quizData = cloneData(validQuiz);
+          state.selectedUnitKey = parseUnitInfo(current).unitKey;
+
+          persistBankToStorage(state.savedSets);
+          renderUnitSelector();
+          renderSavedSetsBank();
+          updateHeaderStats();
+          showToast(`อัปเดตชุด "${trimmedName}" ในคลังเรียบร้อยแล้ว`);
+        } catch (err) {
+          showToast(`อัปเดตชุดไม่สำเร็จ: ${err.message}`, true);
+        }
+      }
+
+      // ทำสำเนาชุดข้อสอบในคลัง
+      function duplicateSetInBank(setId) {
+        const source = state.savedSets.find((s) => s.id === setId);
+        if (!source) return;
+        const copySet = {
+          id: generateSetId(),
+          name: `${source.name} (สำเนา)`,
+          quiz: cloneData(source.quiz),
+          updatedAt: Date.now()
+        };
+        state.savedSets = mergeSetsSafely(state.savedSets, [copySet]);
+        persistBankToStorage(state.savedSets);
+        renderUnitSelector();
+        renderSavedSetsBank();
+        showToast(`ทำสำเนาเป็น "${copySet.name}" แล้ว`);
+      }
+
+      // ลบชุดข้อสอบออกจากคลัง (หากลบชุดสุดท้ายจะคืนค่าชุดเริ่มต้นให้อัตโนมัติ)
+      function deleteSetFromBank(setId) {
+        const idx = state.savedSets.findIndex((s) => s.id === setId);
+        if (idx === -1) return;
+        const removedName = state.savedSets[idx].name;
+        state.savedSets.splice(idx, 1);
+
+        if (state.savedSets.length === 0) {
+          state.savedSets.push(cloneData(defaultInitialSet));
+        }
+
+        if (state.activeSetId === setId) {
+          const fallbackSet = state.savedSets[0];
+          state.activeSetId = fallbackSet.id;
+          state.selectedUnitKey = parseUnitInfo(fallbackSet).unitKey;
+          state.quizData = cloneData(fallbackSet.quiz);
+          state.userAnswers = {};
+          state.submitted = false;
+          state.showAllReview = false;
+          document.getElementById("set-name-input").value = fallbackSet.name;
+          syncTextareaFromState();
+        }
+
+        if (state.renamingSetId === setId) {
+          state.renamingSetId = null;
+        }
+
+        persistBankToStorage(state.savedSets);
+        renderUnitSelector();
+        renderSavedSetsBank();
+        renderQuestions();
+        updateHeaderStats();
+        showToast(`ลบชุด "${removedName}" ออกจากคลังแล้ว`);
+      }
+
+      // จัดกลุ่มชุดข้อสอบตามหน่วย และให้เลือกว่าจะทำ "ก่อนเรียน" หรือ "หลังเรียน"
+      function renderUnitSelector() {
+        const listEl = document.getElementById("unit-selector-list");
+        const countBadge = document.getElementById("unit-count-badge");
+        if (!listEl || !countBadge) return;
+
+        const unitGroupsMap = new Map();
+        state.savedSets.forEach((setItem) => {
+          const info = parseUnitInfo(setItem);
+          if (!unitGroupsMap.has(info.unitKey)) {
+            unitGroupsMap.set(info.unitKey, {
+              unitKey: info.unitKey,
+              unitLabel: info.unitLabel,
+              unitNum: info.unitNum,
+              topic: info.topic,
+              preSets: [],
+              postSets: [],
+              otherSets: [],
+              allSets: []
+            });
+          }
+          const grp = unitGroupsMap.get(info.unitKey);
+          grp.allSets.push(setItem);
+          const mode = detectExamMode(`${setItem.name} ${setItem.quiz?.title || ""}`);
+          if (mode === "pre") {
+            grp.preSets.push(setItem);
+          } else if (mode === "post") {
+            grp.postSets.push(setItem);
+          } else {
+            grp.otherSets.push(setItem);
+          }
+        });
+
+        const sortedGroups = Array.from(unitGroupsMap.values()).sort((a, b) => {
+          if (a.unitNum !== b.unitNum) return a.unitNum - b.unitNum;
+          return a.unitLabel.localeCompare(b.unitLabel, "th");
+        });
+
+        countBadge.textContent = `${sortedGroups.length} หน่วย`;
+        listEl.innerHTML = "";
+
+        sortedGroups.forEach((grp) => {
+          const isSelectedUnit = state.selectedUnitKey === grp.unitKey;
+          const activeInUnit = grp.allSets.find((s) => s.id === state.activeSetId) || null;
+          const activeMode = activeInUnit ? detectExamMode(`${activeInUnit.name} ${activeInUnit.quiz?.title || ""}`) : null;
+
+          const card = document.createElement("div");
+          card.className =
+            "rounded-2xl border p-3 space-y-2 transition-colors " +
+            (isSelectedUnit
+              ? "bg-indigo-50/50 border-indigo-400 ring-1 ring-indigo-300"
+              : "bg-slate-50/70 border-slate-200 hover:border-slate-300");
+
+          const topRow = document.createElement("div");
+          topRow.className = "flex items-start justify-between gap-2";
+
+          const infoCol = document.createElement("div");
+          infoCol.className = "min-w-0";
+
+          const titleEl = document.createElement("div");
+          titleEl.className = "text-sm font-bold text-slate-900 truncate";
+          titleEl.textContent = grp.unitLabel;
+
+          const subEl = document.createElement("div");
+          subEl.className = "text-xs text-slate-500 truncate";
+          subEl.textContent = grp.topic || `${grp.allSets.length} ชุดข้อสอบ`;
+
+          infoCol.appendChild(titleEl);
+          infoCol.appendChild(subEl);
+          topRow.appendChild(infoCol);
+
+          const countTag = document.createElement("span");
+          countTag.className = "shrink-0 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white text-slate-600 border border-slate-200";
+          countTag.textContent = `${grp.allSets.length} ชุด`;
+          topRow.appendChild(countTag);
+
+          card.appendChild(topRow);
+
+          // ปุ่มเลือกทำ "ก่อนเรียน" หรือ "หลังเรียน" สำหรับหน่วยนี้
+          const modeRow = document.createElement("div");
+          modeRow.className = "grid grid-cols-2 gap-2";
+
+          const makeModeButton = (btnLabel, listForMode, modeKey) => {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            const hasSet = listForMode.length > 0;
+            const isChosen = isSelectedUnit && activeMode === modeKey;
+
+            btn.className =
+              "px-3 py-2 rounded-xl text-xs font-semibold border transition-colors flex items-center justify-between gap-1 " +
+              (!hasSet
+                ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed"
+                : isChosen
+                  ? "bg-indigo-600 text-white border-indigo-600 cursor-pointer"
+                  : "bg-white hover:bg-indigo-50 text-slate-800 border-slate-300 cursor-pointer");
+
+            const labelSpan = document.createElement("span");
+            labelSpan.textContent = btnLabel;
+
+            const qSpan = document.createElement("span");
+            qSpan.className =
+              "text-[11px] " +
+              (!hasSet ? "text-slate-400" : isChosen ? "text-indigo-100" : "text-slate-500");
+            qSpan.textContent = hasSet ? `${listForMode[0].quiz.questions.length} ข้อ` : "ไม่มี";
+
+            btn.appendChild(labelSpan);
+            btn.appendChild(qSpan);
+
+            btn.addEventListener("click", () => {
+              state.selectedUnitKey = grp.unitKey;
+              if (!hasSet) {
+                renderUnitSelector();
+                showToast(`ยังไม่มีชุด${btnLabel}สำหรับ${grp.unitLabel}`, true);
+                return;
+              }
+              startQuizSet(listForMode[0].id);
+            });
+
+            return btn;
+          };
+
+          modeRow.appendChild(makeModeButton("ก่อนเรียน", grp.preSets, "pre"));
+          modeRow.appendChild(makeModeButton("หลังเรียน", grp.postSets, "post"));
+          card.appendChild(modeRow);
+
+          // รายการชุดในหน่วยนี้ เพื่อให้กดเลือกชุดที่ต้องการทำได้โดยตรง
+          if (grp.allSets.length > 0) {
+            const setBtnsWrap = document.createElement("div");
+            setBtnsWrap.className = "space-y-1 pt-1 border-t border-slate-200/70";
+
+            grp.allSets.forEach((sItem) => {
+              const isCurrent = sItem.id === state.activeSetId;
+              const sMode = detectExamMode(`${sItem.name} ${sItem.quiz?.title || ""}`);
+              const tagText = sMode === "pre" ? "ก่อนเรียน" : sMode === "post" ? "หลังเรียน" : "ชุดข้อสอบ";
+
+              const sBtn = document.createElement("button");
+              sBtn.type = "button";
+              sBtn.className =
+                "w-full px-3 py-1.5 rounded-xl text-xs border flex items-center justify-between gap-2 text-left transition-colors cursor-pointer " +
+                (isCurrent
+                  ? "bg-indigo-600 text-white border-indigo-600 font-semibold"
+                  : "bg-white hover:bg-slate-100 text-slate-700 border-slate-200 font-medium");
+
+              const nSpan = document.createElement("span");
+              nSpan.className = "truncate";
+              nSpan.textContent = sItem.name;
+
+              const mSpan = document.createElement("span");
+              mSpan.className =
+                "shrink-0 px-2 py-0.5 rounded-full text-[11px] font-semibold " +
+                (isCurrent
+                  ? "bg-indigo-500 text-white"
+                  : sMode === "post"
+                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                    : "bg-indigo-50 text-indigo-700 border border-indigo-100");
+              mSpan.textContent = tagText;
+
+              sBtn.appendChild(nSpan);
+              sBtn.appendChild(mSpan);
+              sBtn.addEventListener("click", () => startQuizSet(sItem.id));
+              setBtnsWrap.appendChild(sBtn);
+            });
+
+            card.appendChild(setBtnsWrap);
+          }
+
+          listEl.appendChild(card);
+        });
+      }
+
+      // วาดรายการชุดข้อสอบทั้งหมดในคลังชุดข้อสอบ
+      function renderSavedSetsBank() {
+        const listEl = document.getElementById("saved-sets-list");
+        const countEl = document.getElementById("saved-sets-count");
+        if (!listEl || !countEl) return;
+
+        countEl.textContent = String(state.savedSets.length);
+        listEl.innerHTML = "";
+
+        state.savedSets.forEach((setItem, index) => {
+          const isCurrent = setItem.id === state.activeSetId;
+          const isRenaming = state.renamingSetId === setItem.id;
+          const qTotal = Array.isArray(setItem.quiz?.questions) ? setItem.quiz.questions.length : 0;
+
+          const card = document.createElement("div");
+          card.className =
+            "rounded-2xl border p-4 flex flex-col justify-between gap-3 transition-colors " +
+            (isCurrent
+              ? "bg-indigo-50/50 border-indigo-400 ring-1 ring-indigo-300"
+              : "bg-white border-slate-200 hover:border-slate-300");
+
+          const topBlock = document.createElement("div");
+          topBlock.className = "space-y-1.5";
+
+          const badgeRow = document.createElement("div");
+          badgeRow.className = "flex items-center justify-between gap-2";
+
+          const metaBadge = document.createElement("span");
+          metaBadge.className = "text-xs font-semibold text-slate-500";
+          metaBadge.textContent = `ลำดับที่ ${index + 1} • ${qTotal} ข้อ`;
+          badgeRow.appendChild(metaBadge);
+
+          if (isCurrent) {
+            const activePill = document.createElement("span");
+            activePill.className = "px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-600 text-white";
+            activePill.textContent = "กำลังทำชุดนี้";
+            badgeRow.appendChild(activePill);
+          }
+
+          topBlock.appendChild(badgeRow);
+
+          if (isRenaming) {
+            const renameForm = document.createElement("div");
+            renameForm.className = "flex items-center gap-2 pt-1";
+
+            const renameInput = document.createElement("input");
+            renameInput.type = "text";
+            renameInput.value = setItem.name;
+            renameInput.className =
+              "flex-1 rounded-xl border border-indigo-400 bg-white px-3 py-1.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500";
+
+            const saveRenameBtn = document.createElement("button");
+            saveRenameBtn.type = "button";
+            saveRenameBtn.className =
+              "px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold cursor-pointer";
+            saveRenameBtn.textContent = "บันทึกชื่อ";
+
+            const cancelRenameBtn = document.createElement("button");
+            cancelRenameBtn.type = "button";
+            cancelRenameBtn.className =
+              "px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium cursor-pointer";
+            cancelRenameBtn.textContent = "ยกเลิก";
+
+            const commitRename = () => {
+              const nextName = renameInput.value.trim();
+              if (!nextName) {
+                showToast("กรุณาป้อนชื่อชุดข้อสอบก่อนบันทึก", true);
+                return;
+              }
+              setItem.name = nextName;
+              setItem.updatedAt = Date.now();
+              state.renamingSetId = null;
+              state.selectedUnitKey = parseUnitInfo(setItem).unitKey;
+              if (isCurrent) {
+                document.getElementById("set-name-input").value = nextName;
+              }
+              persistBankToStorage(state.savedSets);
+              renderUnitSelector();
+              renderSavedSetsBank();
+              updateHeaderStats();
+              showToast(`เปลี่ยนชื่อเป็น "${nextName}" แล้ว`);
+            };
+
+            saveRenameBtn.addEventListener("click", commitRename);
+            renameInput.addEventListener("keydown", (e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commitRename();
+              }
+            });
+            cancelRenameBtn.addEventListener("click", () => {
+              state.renamingSetId = null;
+              renderSavedSetsBank();
+            });
+
+            renameForm.appendChild(renameInput);
+            renameForm.appendChild(saveRenameBtn);
+            renameForm.appendChild(cancelRenameBtn);
+            topBlock.appendChild(renameForm);
+          } else {
+            const setTitleEl = document.createElement("h3");
+            setTitleEl.className = "text-base font-bold text-slate-900 leading-snug";
+            setTitleEl.textContent = setItem.name;
+            topBlock.appendChild(setTitleEl);
+
+            if (setItem.quiz?.title && setItem.quiz.title !== setItem.name) {
+              const subTitleEl = document.createElement("p");
+              subTitleEl.className = "text-xs text-slate-500 truncate";
+              subTitleEl.textContent = setItem.quiz.title;
+              topBlock.appendChild(subTitleEl);
+            }
+          }
+
+          card.appendChild(topBlock);
+
+          // ปุ่มดำเนินการกับแต่ละชุดข้อสอบ
+          const actionsRow = document.createElement("div");
+          actionsRow.className = "flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-100";
+
+          const startBtn = document.createElement("button");
+          startBtn.type = "button";
+          startBtn.className =
+            "px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer bg-indigo-600 hover:bg-indigo-700 text-white";
+          startBtn.textContent = "เริ่มทำชุดนี้";
+          startBtn.addEventListener("click", () => startQuizSet(setItem.id));
+          actionsRow.appendChild(startBtn);
+
+          const renameBtn = document.createElement("button");
+          renameBtn.type = "button";
+          renameBtn.className =
+            "px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium cursor-pointer";
+          renameBtn.textContent = "เปลี่ยนชื่อ";
+          renameBtn.addEventListener("click", () => {
+            state.renamingSetId = setItem.id;
+            renderSavedSetsBank();
+          });
+          actionsRow.appendChild(renameBtn);
+
+          const dupBtn = document.createElement("button");
+          dupBtn.type = "button";
+          dupBtn.className =
+            "px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium cursor-pointer";
+          dupBtn.textContent = "ทำสำเนา";
+          dupBtn.addEventListener("click", () => duplicateSetInBank(setItem.id));
+          actionsRow.appendChild(dupBtn);
+
+          const exportJsonBtn = document.createElement("button");
+          exportJsonBtn.type = "button";
+          exportJsonBtn.className =
+            "px-2.5 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 text-xs font-medium border border-slate-200 cursor-pointer";
+          exportJsonBtn.textContent = ".json";
+          exportJsonBtn.addEventListener("click", () => downloadJsonFile(setItem.quiz, setItem.name));
+          actionsRow.appendChild(exportJsonBtn);
+
+          const exportHtmlBtn = document.createElement("button");
+          exportHtmlBtn.type = "button";
+          exportHtmlBtn.className =
+            "px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold border border-emerald-200 cursor-pointer";
+          exportHtmlBtn.textContent = "Export .html";
+          exportHtmlBtn.addEventListener("click", () => downloadStandaloneHtml(setItem.quiz, setItem.name));
+          actionsRow.appendChild(exportHtmlBtn);
+
+          const delBtn = document.createElement("button");
+          delBtn.type = "button";
+          delBtn.className =
+            "px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-medium border border-rose-200 ml-auto cursor-pointer";
+          delBtn.textContent = "ลบ";
+          delBtn.addEventListener("click", () => deleteSetFromBank(setItem.id));
+          actionsRow.appendChild(delBtn);
+
+          card.appendChild(actionsRow);
+          listEl.appendChild(card);
+        });
+      }
+
+      // อัปเดตส่วนหัว แถบความคืบหน้า และคะแนน
+      function updateHeaderStats() {
+        const { answeredCount, correctCount, totalCount } = calculateScore();
+        const activeSet = findActiveSet();
+        const currentSetLabel = activeSet ? activeSet.name : state.quizData.title;
+
+        document.getElementById("active-set-badge").textContent = currentSetLabel;
+        document.getElementById("quiz-title-display").textContent = state.quizData.title;
+        document.title = `${currentSetLabel} — คลังชุดข้อสอบ`;
+        document.getElementById("quiz-subtitle-display").textContent =
+          `${totalCount} ข้อ • 4 ตัวเลือก (ก, ข, ค, ง) • ตรวจคำตอบและกดแสดงเฉลยแยกอิสระได้`;
+
+        document.getElementById("answered-count").textContent = String(answeredCount);
+        document.getElementById("total-count").textContent = String(totalCount);
+
+        const pct = totalCount > 0 ? Math.round((answeredCount / totalCount) * 100) : 0;
+        document.getElementById("progress-bar").style.width = `${pct}%`;
+
+        const scoreBadge = document.getElementById("score-badge");
+        const revealHint = document.getElementById("reveal-mode-hint");
+        const summaryCard = document.getElementById("result-summary-card");
+
+        if (state.submitted) {
+          scoreBadge.textContent = `คะแนน: ${correctCount} / ${totalCount}`;
+          scoreBadge.classList.remove("hidden");
+
+          if (!state.showAllReview) {
+            revealHint.classList.remove("hidden");
+          } else {
+            revealHint.classList.add("hidden");
+          }
+
+          summaryCard.classList.remove("hidden");
+          document.getElementById("summary-score-text").textContent = `ได้ ${correctCount} / ${totalCount} คะแนน`;
+          const percentScore = totalCount > 0 ? Math.round((correctCount / totalCount) * 100) : 0;
+          document.getElementById("summary-detail-text").textContent = state.showAllReview
+            ? `ชุด: ${currentSetLabel} • คิดเป็น ${percentScore}% • กำลังแสดงเฉลยทุกข้อแล้ว`
+            : `ชุด: ${currentSetLabel} • คิดเป็น ${percentScore}% • ตรวจแล้ว (ยังไม่เฉลยข้อที่ถูก — กด "แสดงเฉลย" เพื่อดูเฉลย)`;
+        } else {
+          scoreBadge.classList.add("hidden");
+          revealHint.classList.add("hidden");
+          summaryCard.classList.add("hidden");
+        }
+
+        const reviewBtn = document.getElementById("btn-toggle-review");
+        const headerRevealBtn = document.getElementById("btn-reveal-header");
+        const bottomRevealBtn = document.getElementById("btn-show-answers-bottom");
+
+        const labelText = state.showAllReview ? "ซ่อนเฉลย" : "แสดงเฉลย";
+        if (reviewBtn) reviewBtn.textContent = labelText;
+        if (headerRevealBtn) headerRevealBtn.textContent = labelText;
+        if (bottomRevealBtn) bottomRevealBtn.textContent = labelText;
+      }
+
+      // วาดรายการคำถามทั้งหมดของชุดปัจจุบัน
+      // หมายเหตุ: state.submitted จะบอกเฉพาะว่าถูก/ผิด แต่ยังไม่เฉลยว่าข้อไหนถูก
+      // เฉลยตัวเลือกที่ถูกต้องจะแสดงเฉพาะเมื่อ state.showAllReview เป็น true เท่านั้น
+      function renderQuestions() {
+        const container = document.getElementById("questions-container");
+        container.innerHTML = "";
+
+        state.quizData.questions.forEach((q, qIdx) => {
+          const qKey = getQuestionKey(q, qIdx);
+          const selectedOption = state.userAnswers[qKey] || null;
+          const isCheckedOnly = state.submitted && !state.showAllReview;
+          const shouldRevealAnswer = state.showAllReview;
+          const isCorrect = selectedOption === q.answer;
+
+          const card = document.createElement("article");
+          card.className = "bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-xs space-y-4";
+
+          const headerRow = document.createElement("div");
+          headerRow.className = "flex items-start justify-between gap-3";
+
+          const qTitle = document.createElement("h2");
+          qTitle.className = "text-base sm:text-lg font-semibold text-slate-900 leading-relaxed";
+          qTitle.textContent = `${qIdx + 1}. ${q.question}`;
+
+          headerRow.appendChild(qTitle);
+
+          if (isCheckedOnly) {
+            const statusPill = document.createElement("span");
+            statusPill.className =
+              "shrink-0 px-2.5 py-1 rounded-full text-xs font-bold " +
+              (selectedOption === null
+                ? "bg-amber-50 text-amber-700 border border-amber-200"
+                : isCorrect
+                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                  : "bg-rose-50 text-rose-700 border border-rose-200");
+            statusPill.textContent =
+              selectedOption === null
+                ? "ยังไม่ตอบ"
+                : isCorrect
+                  ? "ถูกต้อง"
+                  : "ผิด";
+            headerRow.appendChild(statusPill);
+          } else if (shouldRevealAnswer) {
+            const statusPill = document.createElement("span");
+            statusPill.className =
+              "shrink-0 px-2.5 py-1 rounded-full text-xs font-bold " +
+              (selectedOption === null
+                ? "bg-amber-50 text-amber-700 border border-amber-200"
+                : isCorrect
+                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                  : "bg-rose-50 text-rose-700 border border-rose-200");
+            statusPill.textContent =
+              selectedOption === null
+                ? `ยังไม่ตอบ • เฉลย ${q.answer}`
+                : isCorrect
+                  ? "ถูกต้อง"
+                  : `ผิด • เฉลย ${q.answer}`;
+            headerRow.appendChild(statusPill);
+          }
+
+          card.appendChild(headerRow);
+
+          const optionsList = document.createElement("div");
+          optionsList.className = "grid grid-cols-1 gap-2.5";
+
+          OPTION_KEYS.forEach((optKey) => {
+            const optText = q.options[optKey];
+            const isPicked = selectedOption === optKey;
+            const isRightAnswer = q.answer === optKey;
+
+            let btnStyle = "bg-slate-50/70 hover:bg-indigo-50/70 border-slate-200 text-slate-800";
+            let badgeStyle = "bg-white text-slate-700 border-slate-300";
+
+            if (isPicked && !shouldRevealAnswer) {
+              if (isCheckedOnly) {
+                if (isRightAnswer) {
+                  btnStyle = "bg-emerald-50 border-emerald-400 text-emerald-950 ring-1 ring-emerald-400";
+                  badgeStyle = "bg-emerald-600 text-white border-emerald-600";
+                } else {
+                  btnStyle = "bg-rose-50 border-rose-400 text-rose-950 ring-1 ring-rose-400";
+                  badgeStyle = "bg-rose-600 text-white border-rose-600";
+                }
+              } else {
+                btnStyle = "bg-indigo-50 border-indigo-500 text-indigo-950 ring-1 ring-indigo-500";
+                badgeStyle = "bg-indigo-600 text-white border-indigo-600";
+              }
+            }
+
+            if (shouldRevealAnswer) {
+              if (isRightAnswer) {
+                btnStyle = "bg-emerald-50 border-emerald-500 text-emerald-950 ring-1 ring-emerald-500";
+                badgeStyle = "bg-emerald-600 text-white border-emerald-600";
+              } else if (isPicked && !isRightAnswer) {
+                btnStyle = "bg-rose-50 border-rose-400 text-rose-950 ring-1 ring-rose-400";
+                badgeStyle = "bg-rose-600 text-white border-rose-600";
+              } else {
+                btnStyle = "bg-slate-50/50 border-slate-200 text-slate-600";
+              }
+            }
+
+            const optBtn = document.createElement("button");
+            optBtn.type = "button";
+            optBtn.className = `option-card w-full text-left p-3 sm:p-3.5 rounded-xl border flex items-start gap-3 cursor-pointer ${btnStyle}`;
+            optBtn.setAttribute("aria-pressed", String(isPicked));
+
+            const badge = document.createElement("span");
+            badge.className = `w-7 h-7 rounded-lg border text-sm font-bold flex items-center justify-center shrink-0 mt-0.5 ${badgeStyle}`;
+            badge.textContent = optKey;
+
+            const textSpan = document.createElement("span");
+            textSpan.className = "text-sm sm:text-base leading-relaxed flex-1";
+            textSpan.textContent = optText;
+
+            optBtn.appendChild(badge);
+            optBtn.appendChild(textSpan);
+
+            optBtn.addEventListener("click", () => {
+              state.userAnswers[qKey] = optKey;
+              renderQuestions();
+              updateHeaderStats();
+            });
+
+            optionsList.appendChild(optBtn);
+          });
+
+          card.appendChild(optionsList);
+
+          // กล่องเฉลยข้อที่ถูกจะแสดงเฉพาะเมื่อกด "แสดงเฉลย" (state.showAllReview === true) เท่านั้น
+          if (shouldRevealAnswer) {
+            const answerBox = document.createElement("div");
+            answerBox.className =
+              "rounded-xl bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-xs sm:text-sm text-slate-700 flex flex-col gap-1";
+
+            const ansLine = document.createElement("div");
+            ansLine.innerHTML = `<span class="font-bold text-emerald-700">เฉลยที่ถูกต้อง: ${q.answer}. ${q.options[q.answer]}</span>`;
+            answerBox.appendChild(ansLine);
+
+            if (q.explanation) {
+              const expLine = document.createElement("div");
+              expLine.className = "text-slate-600";
+              expLine.textContent = `คำอธิบายเพิ่มเติม: ${q.explanation}`;
+              answerBox.appendChild(expLine);
+            }
+
+            card.appendChild(answerBox);
+          }
+
+          container.appendChild(card);
+        });
+      }
+
+      function syncTextareaFromState() {
+        const textarea = document.getElementById("json-textarea");
+        if (textarea) {
+          textarea.value = JSON.stringify(state.quizData, null, 2);
+        }
+        hideJsonError();
+      }
+
+      function showJsonError(message) {
+        const errBox = document.getElementById("json-error-box");
+        if (!errBox) return;
+        errBox.textContent = message;
+        errBox.classList.remove("hidden");
+      }
+
+      function hideJsonError() {
+        const errBox = document.getElementById("json-error-box");
+        if (!errBox) return;
+        errBox.textContent = "";
+        errBox.classList.add("hidden");
+      }
+
+      function parseJsonFromEditor() {
+        const rawText = document.getElementById("json-textarea").value;
+        const parsed = JSON.parse(rawText);
+        return validateQuizData(parsed);
+      }
+
+      // อ่านไฟล์ JSON เดี่ยวเป็น Promise
+      function readSingleJsonFile(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            try {
+              const content = String(e.target.result || "");
+              const rawObj = JSON.parse(content);
+              const validatedQuiz = validateQuizData(rawObj);
+              const suggestedName =
+                typeof rawObj.setName === "string" && rawObj.setName.trim()
+                  ? rawObj.setName.trim()
+                  : file.name.replace(/\.json$/i, "").trim() || validatedQuiz.title;
+              resolve({ fileName: file.name, suggestedName, validatedQuiz });
+            } catch (err) {
+              reject(new Error(`${file.name}: ${err.message}`));
+            }
+          };
+          reader.onerror = () => reject(new Error(`ไม่สามารถอ่านไฟล์ ${file.name} ได้`));
+          reader.readAsText(file, "utf-8");
+        });
+      }
+
+      // จัดการอัปโหลดไฟล์ .json ทีละหลายไฟล์พร้อมกันจากเครื่องโดยผสานไม่ให้ชุดเดิมหาย
+      async function handleJsonFileUpload(event) {
+        const fileList = event.target && event.target.files ? Array.from(event.target.files) : [];
+        if (fileList.length === 0) return;
+
+        let successCount = 0;
+        const errors = [];
+        let lastCreatedSet = null;
+        const parsedSets = [];
+
+        for (const file of fileList) {
+          try {
+            const { suggestedName, validatedQuiz } = await readSingleJsonFile(file);
+            const newSet = {
+              id: generateSetId(),
+              name: suggestedName,
+              quiz: cloneData(validatedQuiz),
+              updatedAt: Date.now()
+            };
+            parsedSets.push(newSet);
+            lastCreatedSet = newSet;
+            successCount += 1;
+          } catch (err) {
+            errors.push(err.message);
+          }
+        }
+
+        event.target.value = "";
+
+        if (successCount > 0 && lastCreatedSet) {
+          state.savedSets = mergeSetsSafely(state.savedSets, parsedSets);
+          state.activeSetId = lastCreatedSet.id;
+          state.selectedUnitKey = parseUnitInfo(lastCreatedSet).unitKey;
+          state.quizData = cloneData(lastCreatedSet.quiz);
+          state.userAnswers = {};
+          state.submitted = false;
+          state.showAllReview = false;
+          document.getElementById("set-name-input").value = lastCreatedSet.name;
+          syncTextareaFromState();
+          persistBankToStorage(state.savedSets);
+          renderUnitSelector();
+          renderSavedSetsBank();
+          renderQuestions();
+          updateHeaderStats();
+        }
+
+        if (errors.length > 0 && successCount === 0) {
+          showToast(`โหลดไฟล์ไม่สำเร็จ: ${errors[0]}`, true);
+        } else if (errors.length > 0) {
+          showToast(`โหลดสำเร็จ ${successCount} ไฟล์ • ผิดพลาด ${errors.length} ไฟล์`, true);
+        } else if (fileList.length === 1) {
+          showToast(`โหลดไฟล์ "${fileList[0].name}" และบันทึกเป็นชุด "${lastCreatedSet.name}" แล้ว (รักษาชุดเดิมทั้งหมด)`);
+        } else {
+          showToast(`โหลดไฟล์ .json สำเร็จทั้งหมด ${successCount} ชุดในคลังแล้ว (รักษาชุดเดิมทั้งหมด)`);
+        }
+      }
+
+      function toggleAnswersVisibility() {
+        state.showAllReview = !state.showAllReview;
+        renderQuestions();
+        updateHeaderStats();
+        showToast(state.showAllReview ? "แสดงเฉลยข้อที่ถูกต้องแล้ว" : "ซ่อนเฉลยแล้ว");
+      }
+
+      function bindEvents() {
+        document.getElementById("btn-submit-quiz").addEventListener("click", () => {
+          state.submitted = true;
+          renderQuestions();
+          updateHeaderStats();
+          showToast("ตรวจคำตอบแล้ว (ยังไม่เฉลยข้อที่ถูก — กดปุ่มแสดงเฉลยเมื่อต้องการดูเฉลย)");
+        });
+
+        document.getElementById("btn-reveal-header").addEventListener("click", toggleAnswersVisibility);
+        document.getElementById("btn-show-answers-bottom").addEventListener("click", toggleAnswersVisibility);
+
+        document.getElementById("btn-reset-quiz").addEventListener("click", () => {
+          state.userAnswers = {};
+          state.submitted = false;
+          state.showAllReview = false;
+          renderQuestions();
+          updateHeaderStats();
+          showToast("ล้างคำตอบทั้งหมดแล้ว พร้อมเริ่มทำใหม่");
+        });
+
+        document.getElementById("btn-retry-bottom").addEventListener("click", () => {
+          state.userAnswers = {};
+          state.submitted = false;
+          state.showAllReview = false;
+          renderQuestions();
+          updateHeaderStats();
+          window.scrollTo({ top: 0, behavior: "smooth" });
+          showToast("เริ่มทำแบบทดสอบใหม่ได้เลย");
+        });
+
+        document.getElementById("btn-toggle-review").addEventListener("click", toggleAnswersVisibility);
+
+        document.getElementById("btn-toggle-json-panel").addEventListener("click", () => {
+          const panel = document.getElementById("json-editor-panel");
+          const isOpening = panel.classList.contains("hidden");
+          if (isOpening) {
+            syncTextareaFromState();
+            panel.classList.remove("hidden");
+          } else {
+            panel.classList.add("hidden");
+          }
+        });
+
+        document.getElementById("json-file-input").addEventListener("change", handleJsonFileUpload);
+
+        document.getElementById("btn-save-new-set").addEventListener("click", () => {
+          const customName = document.getElementById("set-name-input").value;
+          const panel = document.getElementById("json-editor-panel");
+          if (panel && !panel.classList.contains("hidden")) {
+            try {
+              const validFromEditor = parseJsonFromEditor();
+              hideJsonError();
+              state.userAnswers = {};
+              state.submitted = false;
+              state.showAllReview = false;
+              saveAsNewSet(customName, validFromEditor);
+              renderQuestions();
+              return;
+            } catch (err) {
+              showJsonError(`JSON ไม่ถูกต้อง: ${err.message}`);
+              showToast("ตรวจสอบรูปแบบ JSON ก่อนบันทึก", true);
+              return;
+            }
+          }
+          saveAsNewSet(customName, state.quizData);
+        });
+
+        document.getElementById("btn-update-current-set").addEventListener("click", () => {
+          const customName = document.getElementById("set-name-input").value;
+          const panel = document.getElementById("json-editor-panel");
+          if (panel && !panel.classList.contains("hidden")) {
+            try {
+              const validFromEditor = parseJsonFromEditor();
+              hideJsonError();
+              state.userAnswers = {};
+              state.submitted = false;
+              state.showAllReview = false;
+              updateActiveSetInBank(customName, validFromEditor);
+              renderQuestions();
+              return;
+            } catch (err) {
+              showJsonError(`JSON ไม่ถูกต้อง: ${err.message}`);
+              showToast("ตรวจสอบรูปแบบ JSON ก่อนอัปเดต", true);
+              return;
+            }
+          }
+          updateActiveSetInBank(customName, state.quizData);
+        });
+
+        document.getElementById("btn-export-active-json").addEventListener("click", () => {
+          const customName = document.getElementById("set-name-input").value;
+          const activeSet = findActiveSet();
+          downloadJsonFile(state.quizData, customName || (activeSet ? activeSet.name : state.quizData.title));
+        });
+
+        document.getElementById("btn-format-json").addEventListener("click", () => {
+          try {
+            const parsed = JSON.parse(document.getElementById("json-textarea").value);
+            document.getElementById("json-textarea").value = JSON.stringify(parsed, null, 2);
+            hideJsonError();
+            showToast("จัดระเบียบ JSON เรียบร้อยแล้ว");
+          } catch (err) {
+            showJsonError(`จัดระเบียบไม่ได้ เนื่องจาก JSON ผิดรูปแบบ: ${err.message}`);
+          }
+        });
+
+        document.getElementById("btn-apply-json-quiz").addEventListener("click", () => {
+          try {
+            const validated = parseJsonFromEditor();
+            hideJsonError();
+            state.quizData = cloneData(validated);
+            state.userAnswers = {};
+            state.submitted = false;
+            state.showAllReview = false;
+            renderQuestions();
+            updateHeaderStats();
+            showToast(`นำ JSON "${validated.title}" (${validated.questions.length} ข้อ) มาทำข้อสอบแล้ว`);
+          } catch (err) {
+            showJsonError(`JSON ไม่ถูกต้อง: ${err.message}`);
+            showToast("ตรวจสอบรูปแบบ JSON อีกครั้ง", true);
+          }
+        });
+
+        document.getElementById("btn-save-json-as-named-set").addEventListener("click", () => {
+          try {
+            const validated = parseJsonFromEditor();
+            hideJsonError();
+            const customName = document.getElementById("set-name-input").value;
+            state.userAnswers = {};
+            state.submitted = false;
+            state.showAllReview = false;
+            saveAsNewSet(customName, validated);
+            renderQuestions();
+          } catch (err) {
+            showJsonError(`JSON ไม่ถูกต้อง: ${err.message}`);
+            showToast("ตรวจสอบรูปแบบ JSON ก่อนบันทึก", true);
+          }
+        });
+
+        const exportStandaloneCurrent = () => {
+          const customName = document.getElementById("set-name-input").value;
+          const activeSet = findActiveSet();
+          const label = (customName && customName.trim()) || (activeSet ? activeSet.name : state.quizData.title);
+
+          const panel = document.getElementById("json-editor-panel");
+          if (panel && !panel.classList.contains("hidden")) {
+            try {
+              const validFromEditor = parseJsonFromEditor();
+              hideJsonError();
+              state.quizData = cloneData(validFromEditor);
+              renderQuestions();
+              updateHeaderStats();
+              downloadStandaloneHtml(validFromEditor, label);
+              return;
+            } catch (err) {
+              showJsonError(`ส่งออกไม่ได้ เนื่องจาก JSON ไม่ถูกต้อง: ${err.message}`);
+              showToast("แก้ไข JSON ให้ถูกต้องก่อนส่งออก", true);
+              return;
+            }
+          }
+          downloadStandaloneHtml(state.quizData, label);
+        };
+
+        document.getElementById("btn-export-html").addEventListener("click", exportStandaloneCurrent);
+        document.getElementById("btn-export-bottom").addEventListener("click", exportStandaloneCurrent);
+      }
+
+      // เริ่มต้นระบบคลังชุดข้อสอบและหน้าทำข้อสอบ
+      const initialActiveSet = findActiveSet();
+      if (initialActiveSet) {
+        document.getElementById("set-name-input").value = initialActiveSet.name;
+      }
+      updateStorageStatusNote();
+      bindEvents();
+      syncTextareaFromState();
+      renderUnitSelector();
+      renderSavedSetsBank();
+      renderQuestions();
+      updateHeaderStats();
+    })();
+  </script>
+</body>
+</html>
