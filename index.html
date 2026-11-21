@@ -462,11 +462,9 @@
         "standalone_thai_quiz_sets"
       ];
 
-      // ตัวจัดเก็บข้อมูลสำรองในหน่วยความจำกรณีเบราว์เซอร์จำกัดหรือปิด localStorage
       let memoryBankStore = null;
       let localStorageAvailable = true;
 
-      // แสดงแถบแจ้งเตือนสถานะแบบ Toast แทน alert()
       let toastTimer = null;
       function showToast(message, isError = false) {
         const banner = document.getElementById("toast-banner");
@@ -484,7 +482,6 @@
         }, 3200);
       }
 
-      // คัดลอกอ็อบเจกต์แบบลึก (deep clone) อย่างปลอดภัย
       function cloneData(obj) {
         if (typeof structuredClone === "function") {
           return structuredClone(obj);
@@ -492,12 +489,10 @@
         return JSON.parse(JSON.stringify(obj));
       }
 
-      // สร้างรหัสชุดข้อสอบแบบไม่ซ้ำ
       function generateSetId() {
         return "set_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 7);
       }
 
-      // แปลงเลขไทยและเลขอารบิกเป็นตัวเลขจำนวนเต็มเพื่อเรียงลำดับหน่วยได้ถูกต้อง
       function parseThaiOrArabicNumber(rawToken) {
         const mapDigits = {
           "๐": "0", "๑": "1", "๒": "2", "๓": "3", "๔": "4",
@@ -552,7 +547,6 @@
         };
       }
 
-      // สร้างคีย์เทียบเนื้อหาชุดข้อสอบเพื่อผสานรายการโดยไม่ทำข้อมูลที่อัปโหลดไปแล้วสูญหาย
       function buildSetContentKey(setObj) {
         const qList = Array.isArray(setObj?.quiz?.questions) ? setObj.quiz.questions : [];
         const qSig = qList
@@ -561,13 +555,13 @@
         return `${String(setObj?.quiz?.title || "").trim().toLowerCase()}::${qSig}`;
       }
 
-      // ผสานรายการชุดข้อสอบโดยเก็บชุดที่มีอยู่เดิมไว้อย่างครบถ้วน
-      function mergeSetsSafely(existingSets, incomingSets) {
+      // ผสานรายการชุดข้อสอบ โดยให้ชุดที่นำเข้า/กู้คืนทับหรืออัปเดตชุดเดิมที่มี id หรือเนื้อหาเดียวกันได้ถูกต้อง
+      function mergeSetsSafely(existingSets, incomingSets, prioritizeIncoming = false) {
         const merged = [];
         const byId = new Map();
         const byContent = new Map();
 
-        const insertSet = (entry) => {
+        const insertSet = (entry, isIncoming = false) => {
           if (!entry || typeof entry !== "object") return;
           try {
             const validQuiz = validateQuizData(entry.quiz);
@@ -581,7 +575,7 @@
 
             if (byId.has(item.id)) {
               const idx = byId.get(item.id);
-              if (item.updatedAt >= merged[idx].updatedAt) {
+              if ((isIncoming && prioritizeIncoming) || item.updatedAt >= merged[idx].updatedAt) {
                 merged[idx] = item;
                 if (contentKey) byContent.set(contentKey, idx);
               }
@@ -590,7 +584,7 @@
 
             if (contentKey && byContent.has(contentKey)) {
               const idx = byContent.get(contentKey);
-              if (item.updatedAt > merged[idx].updatedAt) {
+              if ((isIncoming && prioritizeIncoming) || item.updatedAt > merged[idx].updatedAt) {
                 merged[idx] = { ...item, id: merged[idx].id };
                 byId.set(merged[idx].id, idx);
               }
@@ -606,13 +600,12 @@
           }
         };
 
-        (existingSets || []).forEach(insertSet);
-        (incomingSets || []).forEach(insertSet);
+        (existingSets || []).forEach((e) => insertSet(e, false));
+        (incomingSets || []).forEach((e) => insertSet(e, true));
 
         return merged;
       }
 
-      // แปลงข้อมูลจากคีย์ localStorage หลากหลายรูปแบบให้เป็นรายการชุดข้อสอบ
       function extractCandidateSets(parsedVal) {
         if (!parsedVal) return [];
         const list = [];
@@ -662,7 +655,6 @@
         return list;
       }
 
-      // อ่านข้อมูลชุดข้อสอบเริ่มต้นจากแท็ก embedded-quiz-data
       function readEmbeddedQuizData() {
         const scriptEl = document.getElementById("embedded-quiz-data");
         if (!scriptEl) {
@@ -671,7 +663,6 @@
         return validateQuizData(JSON.parse(scriptEl.textContent));
       }
 
-      // ตรวจสอบและปรับมาตรฐานข้อมูลชุดข้อสอบ JSON
       function validateQuizData(raw) {
         if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
           throw new Error("โครงสร้าง JSON ต้องเป็นอ็อบเจกต์ที่มีฟิลด์ title และ questions");
@@ -725,12 +716,11 @@
       const defaultQuizData = readEmbeddedQuizData();
       const defaultInitialSet = {
         id: "default_social_culture_set_1",
-        name: "ชุดที่ 1: สังคมและวัฒนธรรม",
+        name: "หน่วยที่ 1 ก่อนเรียน",
         quiz: cloneData(defaultQuizData),
         updatedAt: Date.now()
       };
 
-      // โหลดรายการชุดข้อสอบจาก localStorage (รวมคีย์ที่เคยใช้ก่อนหน้า) และผสานโดยไม่ให้หาย
       function loadBankFromStorage() {
         let collected = [];
         try {
@@ -751,11 +741,9 @@
               const parsed = JSON.parse(raw);
               const extracted = extractCandidateSets(parsed);
               if (extracted.length > 0) {
-                collected = mergeSetsSafely(collected, extracted);
+                collected = mergeSetsSafely(collected, extracted, false);
               }
-            } catch (_) {
-              // ข้ามคีย์ที่ไม่ใช่ข้อมูลชุดข้อสอบ
-            }
+            } catch (_) {}
           });
 
           if (collected.length > 0) {
@@ -765,27 +753,29 @@
         } catch (err) {
           localStorageAvailable = false;
           if (Array.isArray(memoryBankStore) && memoryBankStore.length > 0) {
-            return mergeSetsSafely([cloneData(defaultInitialSet)], memoryBankStore);
+            return mergeSetsSafely([cloneData(defaultInitialSet)], memoryBankStore, false);
           }
           return [cloneData(defaultInitialSet)];
         }
       }
 
-      // บันทึกรายการชุดข้อสอบลง localStorage พร้อมผสานข้อมูลที่มีอยู่เดิมเสมอ
-      function persistBankToStorage(sets) {
+      // บันทึกรายการชุดข้อสอบลง localStorage (รองรับการเขียนทับเมื่อกู้คืนไฟล์สำรอง)
+      function persistBankToStorage(sets, overwriteExisting = false) {
         const memSnapshot = Array.isArray(memoryBankStore) ? memoryBankStore : [];
         let existingStorageSets = [];
-        try {
-          const rawExisting = window.localStorage.getItem(STORAGE_KEY);
-          if (rawExisting) {
-            existingStorageSets = extractCandidateSets(JSON.parse(rawExisting));
-          }
-        } catch (_) {}
+        if (!overwriteExisting) {
+          try {
+            const rawExisting = window.localStorage.getItem(STORAGE_KEY);
+            if (rawExisting) {
+              existingStorageSets = extractCandidateSets(JSON.parse(rawExisting));
+            }
+          } catch (_) {}
+        }
 
-        const combined = mergeSetsSafely(
-          mergeSetsSafely(existingStorageSets, memSnapshot),
-          sets || []
-        );
+        const combined = overwriteExisting
+          ? mergeSetsSafely([], sets || [], true)
+          : mergeSetsSafely(mergeSetsSafely(existingStorageSets, memSnapshot, false), sets || [], false);
+
         const safeSets = combined.length > 0 ? combined : [cloneData(defaultInitialSet)];
 
         memoryBankStore = cloneData(safeSets);
@@ -810,7 +800,6 @@
         }
       }
 
-      // สถานะหลักของแอปพลิเคชัน
       const initialSets = loadBankFromStorage();
       const initialUnit = parseUnitInfo(initialSets[0]);
       const state = {
@@ -819,13 +808,12 @@
         selectedUnitKey: initialUnit.unitKey,
         quizData: cloneData(initialSets[0].quiz),
         userAnswers: {},
-        submitted: false,       // ตรวจคำตอบแล้ว (บอกถูก/ผิดและคะแนนรวม แต่ยังไม่เฉลยว่าข้อไหนถูก)
-        showAllReview: false,   // แสดงเฉลยข้อที่ถูกต้องทั้งหมด เฉพาะเมื่อกด "แสดงเฉลย"
+        submitted: false,
+        showAllReview: false,
         renamingSetId: null
       };
 
-      // บันทึกรายการเริ่มต้นลงคลังทันทีหากยังไม่เคยมี
-      persistBankToStorage(state.savedSets);
+      persistBankToStorage(state.savedSets, false);
 
       function findActiveSet() {
         return state.savedSets.find((s) => s.id === state.activeSetId) || null;
@@ -861,7 +849,6 @@
         };
       }
 
-      // สร้างชื่อไฟล์ที่ปลอดภัยสำหรับดาวน์โหลด
       function buildSafeFilename(rawName, fallbackName) {
         const clean = String(rawName || "")
           .trim()
@@ -871,7 +858,6 @@
         return clean || fallbackName;
       }
 
-      // สำรองคลังชุดข้อสอบทั้งหมดเป็นไฟล์ .json เพื่อนำไปกู้คืนที่เครื่องหรือมือถืออื่น
       function downloadAllBankBackupJson() {
         try {
           const validSets = [];
@@ -921,7 +907,7 @@
         }
       }
 
-      // กู้คืนชุดข้อสอบจากไฟล์สำรอง .json (รองรับทั้งไฟล์สำรองคลังทั้งชุดและไฟล์ชุดข้อสอบเดี่ยว)
+      // กู้คืนชุดข้อสอบจากไฟล์สำรอง .json และรับประกันว่าชุดในไฟล์สำรองถูกนำเข้าและจัดกลุ่มครบทุกหน่วย
       async function handleRestoreBackupJson(event) {
         const file = event.target && event.target.files ? event.target.files[0] : null;
         if (!file) return;
@@ -956,25 +942,31 @@
             throw new Error("ชุดข้อสอบในไฟล์สำรองไม่ผ่านการตรวจสอบโครงสร้าง");
           }
 
-          const beforeCount = state.savedSets.length;
-          state.savedSets = mergeSetsSafely(state.savedSets, validIncoming);
-          persistBankToStorage(state.savedSets);
+          const isFullBankBackup = Array.isArray(parsed?.sets);
+          const mergedSets = isFullBankBackup
+            ? mergeSetsSafely([], validIncoming, true)
+            : mergeSetsSafely(state.savedSets, validIncoming, true);
 
-          const preferredId = typeof parsed.activeSetId === "string" ? parsed.activeSetId : null;
-          const targetToOpen =
-            (preferredId && state.savedSets.find((s) => s.id === preferredId)) ||
-            state.savedSets.find((s) => s.id === validIncoming[0].id) ||
+          persistBankToStorage(mergedSets, isFullBankBackup);
+
+          // ค้นหาชุดหน่วยที่ 1 ก่อนเรียน หากมีในชุดที่กู้คืน เพื่อเปิดให้เห็นข้อสอบ 10 ข้อทันที
+          const unit1PreSet =
+            state.savedSets.find((s) => s.id === "default_social_culture_set_1") ||
+            state.savedSets.find((s) => {
+              const txt = `${s.name || ""} ${s.quiz?.title || ""}`;
+              return /หน่วยที่\s*(1|๑)/.test(txt) && /ก่อนเรียน/.test(txt);
+            }) ||
             state.savedSets[0];
 
-          if (targetToOpen) {
-            state.activeSetId = targetToOpen.id;
-            state.selectedUnitKey = parseUnitInfo(targetToOpen).unitKey;
-            state.quizData = cloneData(targetToOpen.quiz);
+          if (unit1PreSet) {
+            state.activeSetId = unit1PreSet.id;
+            state.selectedUnitKey = parseUnitInfo(unit1PreSet).unitKey;
+            state.quizData = cloneData(unit1PreSet.quiz);
             state.userAnswers = {};
             state.submitted = false;
             state.showAllReview = false;
             const nameInput = document.getElementById("set-name-input");
-            if (nameInput) nameInput.value = targetToOpen.name;
+            if (nameInput) nameInput.value = unit1PreSet.name;
             syncTextareaFromState();
           }
 
@@ -983,8 +975,7 @@
           renderQuestions();
           updateHeaderStats();
 
-          const addedOrUpdated = Math.max(validIncoming.length, state.savedSets.length - beforeCount);
-          showToast(`กู้คืนข้อมูลจาก "${file.name}" สำเร็จ (${addedOrUpdated} ชุด • รวมในคลัง ${state.savedSets.length} ชุด)`);
+          showToast(`กู้คืนข้อมูลจาก "${file.name}" สำเร็จ (${state.savedSets.length} ชุดในคลัง • พร้อมหน่วยที่ 1 ก่อนเรียน)`);
         } catch (err) {
           showToast(`กู้คืนข้อมูลไม่สำเร็จ: ${err.message}`, true);
         } finally {
@@ -992,7 +983,6 @@
         }
       }
 
-      // ดาวน์โหลดไฟล์ .json ของชุดข้อสอบ
       function downloadJsonFile(quizPayload, customSetName) {
         try {
           const valid = validateQuizData(quizPayload);
@@ -1018,7 +1008,6 @@
         }
       }
 
-      // ส่งออกไฟล์ HTML เดี่ยวแบบ Standalone สำหรับเปิดใช้งานบน Mac / iPhone / iPad โดยไม่ต้องมีเซิร์ฟเวอร์
       function downloadStandaloneHtml(quizPayload, customSetName) {
         try {
           const validPayload = validateQuizData(quizPayload);
@@ -1042,14 +1031,12 @@
             embeddedScript.textContent = `\n${safeJson}\n  `;
           }
 
-          // ฝังรายการชุดข้อสอบทั้งหมดในคลังลงในไฟล์ Standalone HTML ที่ส่งออกด้วย
           const exportedBankScript = docClone.createElement("script");
           exportedBankScript.id = "embedded-quiz-bank-sets";
           exportedBankScript.type = "application/json";
           exportedBankScript.textContent = `\n${JSON.stringify(state.savedSets, null, 2).replace(/<\/script>/gi, "<\\/script>")}\n  `;
           docClone.body.appendChild(exportedBankScript);
 
-          // รีเซ็ตสถานะคะแนนและกล่องแก้ไขในไฟล์ที่ส่งออกเพื่อให้เปิดทำข้อสอบใหม่ได้ทันที
           const exportedSummary = docClone.getElementById("result-summary-card");
           if (exportedSummary) exportedSummary.classList.add("hidden");
           const exportedScoreBadge = docClone.getElementById("score-badge");
@@ -1078,7 +1065,6 @@
         }
       }
 
-      // เริ่มทำชุดข้อสอบที่เลือกทันที
       function startQuizSet(setId) {
         const target = state.savedSets.find((s) => s.id === setId);
         if (!target) {
@@ -1106,7 +1092,6 @@
         showToast(`เริ่มทำชุด "${target.name}" (${target.quiz.questions.length} ข้อ)`);
       }
 
-      // บันทึกชุดข้อสอบปัจจุบันเป็นชุดใหม่ในคลัง
       function saveAsNewSet(customName, customQuizData) {
         try {
           const validQuiz = validateQuizData(customQuizData || state.quizData);
@@ -1117,11 +1102,11 @@
             quiz: cloneData(validQuiz),
             updatedAt: Date.now()
           };
-          state.savedSets = mergeSetsSafely(state.savedSets, [newSet]);
+          state.savedSets = mergeSetsSafely(state.savedSets, [newSet], true);
           state.activeSetId = newSet.id;
           state.selectedUnitKey = parseUnitInfo(newSet).unitKey;
           state.quizData = cloneData(validQuiz);
-          persistBankToStorage(state.savedSets);
+          persistBankToStorage(state.savedSets, false);
           renderUnitSelector();
           renderSavedSetsBank();
           updateHeaderStats();
@@ -1131,7 +1116,6 @@
         }
       }
 
-      // อัปเดตชุดข้อสอบที่กำลังเลือกอยู่ในคลัง
       function updateActiveSetInBank(customName, customQuizData) {
         try {
           const validQuiz = validateQuizData(customQuizData || state.quizData);
@@ -1147,7 +1131,7 @@
           state.quizData = cloneData(validQuiz);
           state.selectedUnitKey = parseUnitInfo(current).unitKey;
 
-          persistBankToStorage(state.savedSets);
+          persistBankToStorage(state.savedSets, false);
           renderUnitSelector();
           renderSavedSetsBank();
           updateHeaderStats();
@@ -1157,7 +1141,6 @@
         }
       }
 
-      // ทำสำเนาชุดข้อสอบในคลัง
       function duplicateSetInBank(setId) {
         const source = state.savedSets.find((s) => s.id === setId);
         if (!source) return;
@@ -1167,14 +1150,13 @@
           quiz: cloneData(source.quiz),
           updatedAt: Date.now()
         };
-        state.savedSets = mergeSetsSafely(state.savedSets, [copySet]);
-        persistBankToStorage(state.savedSets);
+        state.savedSets = mergeSetsSafely(state.savedSets, [copySet], true);
+        persistBankToStorage(state.savedSets, false);
         renderUnitSelector();
         renderSavedSetsBank();
         showToast(`ทำสำเนาเป็น "${copySet.name}" แล้ว`);
       }
 
-      // ลบชุดข้อสอบออกจากคลัง (หากลบชุดสุดท้ายจะคืนค่าชุดเริ่มต้นให้อัตโนมัติ)
       function deleteSetFromBank(setId) {
         const idx = state.savedSets.findIndex((s) => s.id === setId);
         if (idx === -1) return;
@@ -1201,7 +1183,7 @@
           state.renamingSetId = null;
         }
 
-        persistBankToStorage(state.savedSets);
+        persistBankToStorage(state.savedSets, true);
         renderUnitSelector();
         renderSavedSetsBank();
         renderQuestions();
@@ -1209,7 +1191,6 @@
         showToast(`ลบชุด "${removedName}" ออกจากคลังแล้ว`);
       }
 
-      // จัดกลุ่มชุดข้อสอบตามหน่วย และให้เลือกว่าจะทำ "ก่อนเรียน" หรือ "หลังเรียน"
       function renderUnitSelector() {
         const listEl = document.getElementById("unit-selector-list");
         const countBadge = document.getElementById("unit-count-badge");
@@ -1287,7 +1268,6 @@
 
           card.appendChild(topRow);
 
-          // ปุ่มเลือกทำ "ก่อนเรียน" หรือ "หลังเรียน" สำหรับหน่วยนี้
           const modeRow = document.createElement("div");
           modeRow.className = "grid grid-cols-2 gap-2";
 
@@ -1334,7 +1314,6 @@
           modeRow.appendChild(makeModeButton("หลังเรียน", grp.postSets, "post"));
           card.appendChild(modeRow);
 
-          // รายการชุดในหน่วยนี้ เพื่อให้กดเลือกชุดที่ต้องการทำได้โดยตรง
           if (grp.allSets.length > 0) {
             const setBtnsWrap = document.createElement("div");
             setBtnsWrap.className = "space-y-1 pt-1 border-t border-slate-200/70";
@@ -1379,7 +1358,6 @@
         });
       }
 
-      // วาดรายการชุดข้อสอบทั้งหมดในคลังชุดข้อสอบ
       function renderSavedSetsBank() {
         const listEl = document.getElementById("saved-sets-list");
         const countEl = document.getElementById("saved-sets-count");
@@ -1455,7 +1433,7 @@
               if (isCurrent) {
                 document.getElementById("set-name-input").value = nextName;
               }
-              persistBankToStorage(state.savedSets);
+              persistBankToStorage(state.savedSets, false);
               renderUnitSelector();
               renderSavedSetsBank();
               updateHeaderStats();
@@ -1494,7 +1472,6 @@
 
           card.appendChild(topBlock);
 
-          // ปุ่มดำเนินการกับแต่ละชุดข้อสอบ
           const actionsRow = document.createElement("div");
           actionsRow.className = "flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-100";
 
@@ -1554,7 +1531,6 @@
         });
       }
 
-      // อัปเดตส่วนหัว แถบความคืบหน้า และคะแนน
       function updateHeaderStats() {
         const { answeredCount, correctCount, totalCount } = calculateScore();
         const activeSet = findActiveSet();
@@ -1608,9 +1584,6 @@
         if (bottomRevealBtn) bottomRevealBtn.textContent = labelText;
       }
 
-      // วาดรายการคำถามทั้งหมดของชุดปัจจุบัน
-      // หมายเหตุ: state.submitted จะบอกเฉพาะว่าถูก/ผิด แต่ยังไม่เฉลยว่าข้อไหนถูก
-      // เฉลยตัวเลือกที่ถูกต้องจะแสดงเฉพาะเมื่อ state.showAllReview เป็น true เท่านั้น
       function renderQuestions() {
         const container = document.getElementById("questions-container");
         container.innerHTML = "";
@@ -1735,7 +1708,6 @@
 
           card.appendChild(optionsList);
 
-          // กล่องเฉลยข้อที่ถูกจะแสดงเฉพาะเมื่อกด "แสดงเฉลย" (state.showAllReview === true) เท่านั้น
           if (shouldRevealAnswer) {
             const answerBox = document.createElement("div");
             answerBox.className =
@@ -1787,7 +1759,6 @@
         return validateQuizData(parsed);
       }
 
-      // อ่านไฟล์ JSON เดี่ยวเป็น Promise
       function readSingleJsonFile(file) {
         return new Promise((resolve, reject) => {
           const reader = new FileReader();
@@ -1810,7 +1781,6 @@
         });
       }
 
-      // จัดการอัปโหลดไฟล์ .json ทีละหลายไฟล์พร้อมกันจากเครื่องโดยผสานไม่ให้ชุดเดิมหาย
       async function handleJsonFileUpload(event) {
         const fileList = event.target && event.target.files ? Array.from(event.target.files) : [];
         if (fileList.length === 0) return;
@@ -1840,7 +1810,7 @@
         event.target.value = "";
 
         if (successCount > 0 && lastCreatedSet) {
-          state.savedSets = mergeSetsSafely(state.savedSets, parsedSets);
+          state.savedSets = mergeSetsSafely(state.savedSets, parsedSets, true);
           state.activeSetId = lastCreatedSet.id;
           state.selectedUnitKey = parseUnitInfo(lastCreatedSet).unitKey;
           state.quizData = cloneData(lastCreatedSet.quiz);
@@ -1849,7 +1819,7 @@
           state.showAllReview = false;
           document.getElementById("set-name-input").value = lastCreatedSet.name;
           syncTextareaFromState();
-          persistBankToStorage(state.savedSets);
+          persistBankToStorage(state.savedSets, false);
           renderUnitSelector();
           renderSavedSetsBank();
           renderQuestions();
@@ -2049,7 +2019,6 @@
         document.getElementById("btn-export-bottom").addEventListener("click", exportStandaloneCurrent);
       }
 
-      // เริ่มต้นระบบคลังชุดข้อสอบและหน้าทำข้อสอบ
       const initialActiveSet = findActiveSet();
       if (initialActiveSet) {
         document.getElementById("set-name-input").value = initialActiveSet.name;
