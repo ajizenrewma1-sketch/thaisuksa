@@ -133,6 +133,30 @@
                 วาง / แก้ไข JSON
               </button>
             </div>
+
+            <!-- แถบสำรองข้อมูลและกู้คืนคลังข้อสอบทั้งหมดข้ามเครื่อง/มือถือ -->
+            <div class="rounded-xl bg-indigo-50/70 border border-indigo-200/80 p-3 space-y-2">
+              <div class="text-xs font-semibold text-indigo-950">
+                สำรอง / กู้คืนคลังข้อสอบทั้งหมด (ย้ายไปเครื่องหรือมือถืออื่น)
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
+                <button
+                  id="btn-backup-all-json"
+                  type="button"
+                  class="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold cursor-pointer"
+                >
+                  สำรองคลังทั้งหมด (.json)
+                </button>
+                <button
+                  id="btn-restore-backup-json"
+                  type="button"
+                  class="px-3 py-1.5 rounded-xl bg-white hover:bg-indigo-50 text-indigo-800 text-xs font-semibold border border-indigo-300 cursor-pointer"
+                >
+                  กู้คืนจากไฟล์สำรอง (.json)
+                </button>
+                <input id="json-backup-file-input" type="file" accept=".json,application/json" class="hidden" />
+              </div>
+            </div>
           </div>
 
           <!-- แถบบันทึกชุดข้อสอบปัจจุบันหรือชุดใหม่ลงคลังพร้อมตั้งชื่อ -->
@@ -427,6 +451,8 @@
     (function () {
       const OPTION_KEYS = ["ก", "ข", "ค", "ง"];
       const STORAGE_KEY = "thai_quiz_bank_sets_v1";
+      const BACKUP_FORMAT = "thai_quiz_bank_backup";
+      const BACKUP_VERSION = 1;
       const PRIOR_QUIZ_STORAGE_KEYS = [
         "thai_quiz_bank_sets_v1",
         "thai_quiz_bank_sets_v2",
@@ -778,9 +804,9 @@
         const noteEl = document.getElementById("storage-status-note");
         if (!noteEl) return;
         if (localStorageAvailable) {
-          noteEl.textContent = "บันทึกชุดข้อสอบแยกตามชื่ออัตโนมัติในเบราว์เซอร์ (localStorage) รักษาชุดที่อัปโหลดไว้ทั้งหมด";
+          noteEl.textContent = "บันทึกชุดข้อสอบแยกตามชื่ออัตโนมัติในเบราว์เซอร์ (localStorage) พร้อมสำรอง/กู้คืนไฟล์ .json ข้ามเครื่องได้";
         } else {
-          noteEl.textContent = "โหมดสำรองในหน่วยความจำ (เบราว์เซอร์จำกัด localStorage) — แนะนำให้กด Export Standalone HTML หรือดาวน์โหลด .json เพื่อเก็บไฟล์ถาวร";
+          noteEl.textContent = "โหมดสำรองในหน่วยความจำ (เบราว์เซอร์จำกัด localStorage) — แนะนำให้กดสำรองคลัง (.json) หรือ Export Standalone HTML";
         }
       }
 
@@ -843,6 +869,127 @@
           .replace(/[^a-z0-9ก-๙]+/gi, "_")
           .replace(/^_+|_+$/g, "");
         return clean || fallbackName;
+      }
+
+      // สำรองคลังชุดข้อสอบทั้งหมดเป็นไฟล์ .json เพื่อนำไปกู้คืนที่เครื่องหรือมือถืออื่น
+      function downloadAllBankBackupJson() {
+        try {
+          const validSets = [];
+          for (const item of state.savedSets) {
+            if (!item || typeof item !== "object") continue;
+            const validQuiz = validateQuizData(item.quiz);
+            validSets.push({
+              id: typeof item.id === "string" && item.id.trim() ? item.id.trim() : generateSetId(),
+              name: typeof item.name === "string" && item.name.trim() ? item.name.trim() : validQuiz.title,
+              quiz: cloneData(validQuiz),
+              updatedAt: typeof item.updatedAt === "number" ? item.updatedAt : Date.now()
+            });
+          }
+
+          if (validSets.length === 0) {
+            showToast("ไม่มีชุดข้อสอบในคลังให้สำรอง", true);
+            return;
+          }
+
+          const now = new Date();
+          const dateStamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+          const backupPayload = {
+            format: BACKUP_FORMAT,
+            version: BACKUP_VERSION,
+            exportedAt: now.toISOString(),
+            activeSetId: state.activeSetId,
+            totalSets: validSets.length,
+            sets: validSets
+          };
+
+          const jsonStr = JSON.stringify(backupPayload, null, 2);
+          const blob = new Blob([jsonStr], { type: "application/json;charset=utf-8" });
+          const url = URL.createObjectURL(blob);
+          const filename = `quiz_bank_backup_${dateStamp}.json`;
+
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = filename;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          setTimeout(() => URL.revokeObjectURL(url), 1500);
+
+          showToast(`สำรองคลังข้อสอบทั้งหมด ${validSets.length} ชุดเป็นไฟล์ ${filename} เรียบร้อยแล้ว`);
+        } catch (err) {
+          showToast(`สำรองคลังไม่สำเร็จ: ${err.message}`, true);
+        }
+      }
+
+      // กู้คืนชุดข้อสอบจากไฟล์สำรอง .json (รองรับทั้งไฟล์สำรองคลังทั้งชุดและไฟล์ชุดข้อสอบเดี่ยว)
+      async function handleRestoreBackupJson(event) {
+        const file = event.target && event.target.files ? event.target.files[0] : null;
+        if (!file) return;
+
+        try {
+          const text = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(String(e.target.result || ""));
+            reader.onerror = () => reject(new Error("ไม่สามารถอ่านไฟล์สำรองได้"));
+            reader.readAsText(file, "utf-8");
+          });
+
+          const parsed = JSON.parse(text);
+          const candidateSets = extractCandidateSets(parsed);
+
+          if (!candidateSets || candidateSets.length === 0) {
+            throw new Error("ไม่พบชุดข้อสอบที่ถูกต้องในไฟล์สำรองนี้");
+          }
+
+          const validIncoming = [];
+          for (const entry of candidateSets) {
+            const validQuiz = validateQuizData(entry.quiz);
+            validIncoming.push({
+              id: typeof entry.id === "string" && entry.id.trim() ? entry.id.trim() : generateSetId(),
+              name: typeof entry.name === "string" && entry.name.trim() ? entry.name.trim() : validQuiz.title,
+              quiz: cloneData(validQuiz),
+              updatedAt: typeof entry.updatedAt === "number" ? entry.updatedAt : Date.now()
+            });
+          }
+
+          if (validIncoming.length === 0) {
+            throw new Error("ชุดข้อสอบในไฟล์สำรองไม่ผ่านการตรวจสอบโครงสร้าง");
+          }
+
+          const beforeCount = state.savedSets.length;
+          state.savedSets = mergeSetsSafely(state.savedSets, validIncoming);
+          persistBankToStorage(state.savedSets);
+
+          const preferredId = typeof parsed.activeSetId === "string" ? parsed.activeSetId : null;
+          const targetToOpen =
+            (preferredId && state.savedSets.find((s) => s.id === preferredId)) ||
+            state.savedSets.find((s) => s.id === validIncoming[0].id) ||
+            state.savedSets[0];
+
+          if (targetToOpen) {
+            state.activeSetId = targetToOpen.id;
+            state.selectedUnitKey = parseUnitInfo(targetToOpen).unitKey;
+            state.quizData = cloneData(targetToOpen.quiz);
+            state.userAnswers = {};
+            state.submitted = false;
+            state.showAllReview = false;
+            const nameInput = document.getElementById("set-name-input");
+            if (nameInput) nameInput.value = targetToOpen.name;
+            syncTextareaFromState();
+          }
+
+          renderUnitSelector();
+          renderSavedSetsBank();
+          renderQuestions();
+          updateHeaderStats();
+
+          const addedOrUpdated = Math.max(validIncoming.length, state.savedSets.length - beforeCount);
+          showToast(`กู้คืนข้อมูลจาก "${file.name}" สำเร็จ (${addedOrUpdated} ชุด • รวมในคลัง ${state.savedSets.length} ชุด)`);
+        } catch (err) {
+          showToast(`กู้คืนข้อมูลไม่สำเร็จ: ${err.message}`, true);
+        } finally {
+          event.target.value = "";
+        }
       }
 
       // ดาวน์โหลดไฟล์ .json ของชุดข้อสอบ
@@ -1771,6 +1918,14 @@
         });
 
         document.getElementById("json-file-input").addEventListener("change", handleJsonFileUpload);
+
+        document.getElementById("btn-backup-all-json").addEventListener("click", downloadAllBankBackupJson);
+
+        const restoreInput = document.getElementById("json-backup-file-input");
+        document.getElementById("btn-restore-backup-json").addEventListener("click", () => {
+          if (restoreInput) restoreInput.click();
+        });
+        restoreInput.addEventListener("change", handleRestoreBackupJson);
 
         document.getElementById("btn-save-new-set").addEventListener("click", () => {
           const customName = document.getElementById("set-name-input").value;
