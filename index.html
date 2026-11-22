@@ -451,6 +451,7 @@
     (function () {
       const OPTION_KEYS = ["ก", "ข", "ค", "ง"];
       const STORAGE_KEY = "thai_quiz_bank_sets_v1";
+      const PROGRESS_STORAGE_KEY = "thai_quiz_progress_by_set_v1";
       const BACKUP_FORMAT = "thai_quiz_bank_backup";
       const BACKUP_VERSION = 1;
       const PRIOR_QUIZ_STORAGE_KEYS = [
@@ -463,6 +464,7 @@
       ];
 
       let memoryBankStore = null;
+      let memoryProgressStore = {};
       let localStorageAvailable = true;
 
       let toastTimer = null;
@@ -493,6 +495,111 @@
         return "set_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 7);
       }
 
+      function createEmptyProgressEntry() {
+        return {
+          userAnswers: {},
+          submitted: false,
+          showAllReview: false
+        };
+      }
+
+      function normalizeProgressEntry(rawEntry) {
+        if (!rawEntry || typeof rawEntry !== "object") {
+          return createEmptyProgressEntry();
+        }
+        const cleanAnswers = {};
+        if (rawEntry.userAnswers && typeof rawEntry.userAnswers === "object") {
+          Object.entries(rawEntry.userAnswers).forEach(([k, v]) => {
+            if (typeof v === "string" && OPTION_KEYS.includes(v)) {
+              cleanAnswers[String(k)] = v;
+            }
+          });
+        }
+        return {
+          userAnswers: cleanAnswers,
+          submitted: Boolean(rawEntry.submitted),
+          showAllReview: Boolean(rawEntry.showAllReview)
+        };
+      }
+
+      function loadProgressMapFromStorage() {
+        let map = {};
+        try {
+          const raw = window.localStorage.getItem(PROGRESS_STORAGE_KEY);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+              Object.entries(parsed).forEach(([setId, entry]) => {
+                if (typeof setId === "string" && setId.trim()) {
+                  map[setId.trim()] = normalizeProgressEntry(entry);
+                }
+              });
+            }
+          }
+        } catch (_) {
+          map = cloneData(memoryProgressStore || {});
+        }
+        memoryProgressStore = cloneData(map);
+        return map;
+      }
+
+      function persistProgressMapToStorage() {
+        const cleanMap = {};
+        Object.entries(state.progressBySetId || {}).forEach(([setId, entry]) => {
+          if (typeof setId === "string" && setId.trim()) {
+            cleanMap[setId.trim()] = normalizeProgressEntry(entry);
+          }
+        });
+        memoryProgressStore = cloneData(cleanMap);
+        try {
+          window.localStorage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(cleanMap));
+        } catch (_) {}
+      }
+
+      function ensureSetProgress(setId) {
+        const key = String(setId || "");
+        if (!state.progressBySetId[key]) {
+          state.progressBySetId[key] = createEmptyProgressEntry();
+        } else {
+          state.progressBySetId[key] = normalizeProgressEntry(state.progressBySetId[key]);
+        }
+        return state.progressBySetId[key];
+      }
+
+      function getCurrentProgress() {
+        return ensureSetProgress(state.activeSetId);
+      }
+
+      function saveCurrentProgressSnapshot() {
+        if (!state.activeSetId) return;
+        state.progressBySetId[state.activeSetId] = normalizeProgressEntry({
+          userAnswers: cloneData(state.userAnswers || {}),
+          submitted: Boolean(state.submitted),
+          showAllReview: Boolean(state.showAllReview)
+        });
+        persistProgressMapToStorage();
+      }
+
+      function loadProgressForSet(setId) {
+        const entry = ensureSetProgress(setId);
+        state.userAnswers = cloneData(entry.userAnswers || {});
+        state.submitted = Boolean(entry.submitted);
+        state.showAllReview = Boolean(entry.showAllReview);
+      }
+
+      function resetOnlyActiveSetProgress(setId) {
+        const targetId = setId || state.activeSetId;
+        if (!targetId) return;
+        const fresh = createEmptyProgressEntry();
+        state.progressBySetId[targetId] = cloneData(fresh);
+        if (targetId === state.activeSetId) {
+          state.userAnswers = {};
+          state.submitted = false;
+          state.showAllReview = false;
+        }
+        persistProgressMapToStorage();
+      }
+
       function parseThaiOrArabicNumber(rawToken) {
         const mapDigits = {
           "๐": "0", "๑": "1", "๒": "2", "๓": "3", "๔": "4",
@@ -503,7 +610,6 @@
         return Number.isNaN(parsed) ? 999999 : parsed;
       }
 
-      // ตรวจสอบว่าเป็นชุดทดสอบก่อนเรียนหรือหลังเรียนจากชื่อชุดหรือ title
       function detectExamMode(text) {
         const str = String(text || "");
         if (/หลังเรียน/.test(str)) return "post";
@@ -511,7 +617,6 @@
         return "other";
       }
 
-      // แยกข้อมูลหน่วยการเรียนจากชื่อชุดหรือ title
       function parseUnitInfo(setItem) {
         const combined = `${setItem?.name || ""} ${setItem?.quiz?.title || ""}`.trim();
         const match = combined.match(/หน่วยที่\s*([๐-๙0-9]+)/);
@@ -555,7 +660,6 @@
         return `${String(setObj?.quiz?.title || "").trim().toLowerCase()}::${qSig}`;
       }
 
-      // ผสานรายการชุดข้อสอบ โดยให้ชุดที่นำเข้า/กู้คืนทับหรืออัปเดตชุดเดิมที่มี id หรือเนื้อหาเดียวกันได้ถูกต้อง
       function mergeSetsSafely(existingSets, incomingSets, prioritizeIncoming = false) {
         const merged = [];
         const byId = new Map();
@@ -759,7 +863,6 @@
         }
       }
 
-      // บันทึกรายการชุดข้อสอบลง localStorage (รองรับการเขียนทับเมื่อกู้คืนไฟล์สำรอง)
       function persistBankToStorage(sets, overwriteExisting = false) {
         const memSnapshot = Array.isArray(memoryBankStore) ? memoryBankStore : [];
         let existingStorageSets = [];
@@ -794,26 +897,31 @@
         const noteEl = document.getElementById("storage-status-note");
         if (!noteEl) return;
         if (localStorageAvailable) {
-          noteEl.textContent = "บันทึกชุดข้อสอบแยกตามชื่ออัตโนมัติในเบราว์เซอร์ (localStorage) พร้อมสำรอง/กู้คืนไฟล์ .json ข้ามเครื่องได้";
+          noteEl.textContent = "บันทึกชุดข้อสอบแยกตามชื่อและจำคำตอบค้างไว้แยกแต่ละชุดอัตโนมัติ (localStorage) พร้อมสำรอง/กู้คืนไฟล์ .json ได้";
         } else {
           noteEl.textContent = "โหมดสำรองในหน่วยความจำ (เบราว์เซอร์จำกัด localStorage) — แนะนำให้กดสำรองคลัง (.json) หรือ Export Standalone HTML";
         }
       }
 
       const initialSets = loadBankFromStorage();
+      const initialProgressMap = loadProgressMapFromStorage();
       const initialUnit = parseUnitInfo(initialSets[0]);
+      const initialSetProgress = normalizeProgressEntry(initialProgressMap[initialSets[0].id]);
+
       const state = {
         savedSets: initialSets,
         activeSetId: initialSets[0].id,
         selectedUnitKey: initialUnit.unitKey,
         quizData: cloneData(initialSets[0].quiz),
-        userAnswers: {},
-        submitted: false,
-        showAllReview: false,
+        progressBySetId: initialProgressMap,
+        userAnswers: cloneData(initialSetProgress.userAnswers),
+        submitted: Boolean(initialSetProgress.submitted),
+        showAllReview: Boolean(initialSetProgress.showAllReview),
         renamingSetId: null
       };
 
       persistBankToStorage(state.savedSets, false);
+      saveCurrentProgressSnapshot();
 
       function findActiveSet() {
         return state.savedSets.find((s) => s.id === state.activeSetId) || null;
@@ -846,6 +954,29 @@
           answeredCount,
           correctCount,
           totalCount: questions.length
+        };
+      }
+
+      function getSetProgressSummary(setItem) {
+        const p = normalizeProgressEntry(state.progressBySetId[setItem.id]);
+        const qList = Array.isArray(setItem.quiz?.questions) ? setItem.quiz.questions : [];
+        const total = qList.length;
+        let answered = 0;
+        let correct = 0;
+        qList.forEach((q, idx) => {
+          const k = getQuestionKey(q, idx);
+          const picked = p.userAnswers[k];
+          if (picked) {
+            answered += 1;
+            if (picked === q.answer) correct += 1;
+          }
+        });
+        return {
+          answered,
+          correct,
+          total,
+          submitted: p.submitted,
+          showAllReview: p.showAllReview
         };
       }
 
@@ -907,12 +1038,13 @@
         }
       }
 
-      // กู้คืนชุดข้อสอบจากไฟล์สำรอง .json และรับประกันว่าชุดในไฟล์สำรองถูกนำเข้าและจัดกลุ่มครบทุกหน่วย
       async function handleRestoreBackupJson(event) {
         const file = event.target && event.target.files ? event.target.files[0] : null;
         if (!file) return;
 
         try {
+          saveCurrentProgressSnapshot();
+
           const text = await new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = (e) => resolve(String(e.target.result || ""));
@@ -949,7 +1081,6 @@
 
           persistBankToStorage(mergedSets, isFullBankBackup);
 
-          // ค้นหาชุดหน่วยที่ 1 ก่อนเรียน หากมีในชุดที่กู้คืน เพื่อเปิดให้เห็นข้อสอบ 10 ข้อทันที
           const unit1PreSet =
             state.savedSets.find((s) => s.id === "default_social_culture_set_1") ||
             state.savedSets.find((s) => {
@@ -962,9 +1093,7 @@
             state.activeSetId = unit1PreSet.id;
             state.selectedUnitKey = parseUnitInfo(unit1PreSet).unitKey;
             state.quizData = cloneData(unit1PreSet.quiz);
-            state.userAnswers = {};
-            state.submitted = false;
-            state.showAllReview = false;
+            loadProgressForSet(unit1PreSet.id);
             const nameInput = document.getElementById("set-name-input");
             if (nameInput) nameInput.value = unit1PreSet.name;
             syncTextareaFromState();
@@ -1065,18 +1194,20 @@
         }
       }
 
+      // สลับไปเปิดชุดข้อสอบที่เลือก พร้อมเก็บสถานะของชุดเดิมไว้ และกู้คืนสถานะที่ค้างไว้ของชุดปลายทาง
       function startQuizSet(setId) {
         const target = state.savedSets.find((s) => s.id === setId);
         if (!target) {
           showToast("ไม่พบชุดข้อสอบที่ต้องการเปิด", true);
           return;
         }
+
+        saveCurrentProgressSnapshot();
+
         state.activeSetId = target.id;
         state.selectedUnitKey = parseUnitInfo(target).unitKey;
         state.quizData = cloneData(target.quiz);
-        state.userAnswers = {};
-        state.submitted = false;
-        state.showAllReview = false;
+        loadProgressForSet(target.id);
         state.renamingSetId = null;
 
         const nameInput = document.getElementById("set-name-input");
@@ -1089,11 +1220,17 @@
         renderSavedSetsBank();
         renderQuestions();
         updateHeaderStats();
-        showToast(`เริ่มทำชุด "${target.name}" (${target.quiz.questions.length} ข้อ)`);
+
+        const progSummary = getSetProgressSummary(target);
+        const progressNote = progSummary.answered > 0
+          ? ` (ค้างทำไว้ ${progSummary.answered}/${progSummary.total} ข้อ)`
+          : "";
+        showToast(`เริ่มทำชุด "${target.name}" (${target.quiz.questions.length} ข้อ)${progressNote}`);
       }
 
       function saveAsNewSet(customName, customQuizData) {
         try {
+          saveCurrentProgressSnapshot();
           const validQuiz = validateQuizData(customQuizData || state.quizData);
           const trimmedName = (customName || "").trim() || validQuiz.title;
           const newSet = {
@@ -1106,6 +1243,7 @@
           state.activeSetId = newSet.id;
           state.selectedUnitKey = parseUnitInfo(newSet).unitKey;
           state.quizData = cloneData(validQuiz);
+          loadProgressForSet(newSet.id);
           persistBankToStorage(state.savedSets, false);
           renderUnitSelector();
           renderSavedSetsBank();
@@ -1131,6 +1269,7 @@
           state.quizData = cloneData(validQuiz);
           state.selectedUnitKey = parseUnitInfo(current).unitKey;
 
+          saveCurrentProgressSnapshot();
           persistBankToStorage(state.savedSets, false);
           renderUnitSelector();
           renderSavedSetsBank();
@@ -1163,6 +1302,11 @@
         const removedName = state.savedSets[idx].name;
         state.savedSets.splice(idx, 1);
 
+        if (state.progressBySetId && Object.prototype.hasOwnProperty.call(state.progressBySetId, setId)) {
+          delete state.progressBySetId[setId];
+          persistProgressMapToStorage();
+        }
+
         if (state.savedSets.length === 0) {
           state.savedSets.push(cloneData(defaultInitialSet));
         }
@@ -1172,9 +1316,7 @@
           state.activeSetId = fallbackSet.id;
           state.selectedUnitKey = parseUnitInfo(fallbackSet).unitKey;
           state.quizData = cloneData(fallbackSet.quiz);
-          state.userAnswers = {};
-          state.submitted = false;
-          state.showAllReview = false;
+          loadProgressForSet(fallbackSet.id);
           document.getElementById("set-name-input").value = fallbackSet.name;
           syncTextareaFromState();
         }
@@ -1276,6 +1418,7 @@
             btn.type = "button";
             const hasSet = listForMode.length > 0;
             const isChosen = isSelectedUnit && activeMode === modeKey;
+            const modeProg = hasSet ? getSetProgressSummary(listForMode[0]) : null;
 
             btn.className =
               "px-3 py-2 rounded-xl text-xs font-semibold border transition-colors flex items-center justify-between gap-1 " +
@@ -1292,7 +1435,13 @@
             qSpan.className =
               "text-[11px] " +
               (!hasSet ? "text-slate-400" : isChosen ? "text-indigo-100" : "text-slate-500");
-            qSpan.textContent = hasSet ? `${listForMode[0].quiz.questions.length} ข้อ` : "ไม่มี";
+            if (!hasSet) {
+              qSpan.textContent = "ไม่มี";
+            } else if (modeProg && modeProg.answered > 0) {
+              qSpan.textContent = `ค้าง ${modeProg.answered}/${modeProg.total}`;
+            } else {
+              qSpan.textContent = `${listForMode[0].quiz.questions.length} ข้อ`;
+            }
 
             btn.appendChild(labelSpan);
             btn.appendChild(qSpan);
@@ -1322,6 +1471,7 @@
               const isCurrent = sItem.id === state.activeSetId;
               const sMode = detectExamMode(`${sItem.name} ${sItem.quiz?.title || ""}`);
               const tagText = sMode === "pre" ? "ก่อนเรียน" : sMode === "post" ? "หลังเรียน" : "ชุดข้อสอบ";
+              const sProg = getSetProgressSummary(sItem);
 
               const sBtn = document.createElement("button");
               sBtn.type = "button";
@@ -1333,7 +1483,7 @@
 
               const nSpan = document.createElement("span");
               nSpan.className = "truncate";
-              nSpan.textContent = sItem.name;
+              nSpan.textContent = sProg.answered > 0 ? `${sItem.name} (${sProg.answered}/${sProg.total})` : sItem.name;
 
               const mSpan = document.createElement("span");
               mSpan.className =
@@ -1370,6 +1520,7 @@
           const isCurrent = setItem.id === state.activeSetId;
           const isRenaming = state.renamingSetId === setItem.id;
           const qTotal = Array.isArray(setItem.quiz?.questions) ? setItem.quiz.questions.length : 0;
+          const prog = getSetProgressSummary(setItem);
 
           const card = document.createElement("div");
           card.className =
@@ -1382,11 +1533,14 @@
           topBlock.className = "space-y-1.5";
 
           const badgeRow = document.createElement("div");
-          badgeRow.className = "flex items-center justify-between gap-2";
+          badgeRow.className = "flex items-center justify-between gap-2 flex-wrap";
 
           const metaBadge = document.createElement("span");
           metaBadge.className = "text-xs font-semibold text-slate-500";
-          metaBadge.textContent = `ลำดับที่ ${index + 1} • ${qTotal} ข้อ`;
+          const progressText = prog.answered > 0
+            ? ` • ทำค้างไว้ ${prog.answered}/${qTotal} ข้อ`
+            : "";
+          metaBadge.textContent = `ลำดับที่ ${index + 1} • ${qTotal} ข้อ${progressText}`;
           badgeRow.appendChild(metaBadge);
 
           if (isCurrent) {
@@ -1394,6 +1548,11 @@
             activePill.className = "px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-600 text-white";
             activePill.textContent = "กำลังทำชุดนี้";
             badgeRow.appendChild(activePill);
+          } else if (prog.answered > 0) {
+            const savedPill = document.createElement("span");
+            savedPill.className = "px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200";
+            savedPill.textContent = prog.submitted ? `ตรวจแล้ว ${prog.correct}/${qTotal}` : "มีคำตอบค้างไว้";
+            badgeRow.appendChild(savedPill);
           }
 
           topBlock.appendChild(badgeRow);
@@ -1479,7 +1638,7 @@
           startBtn.type = "button";
           startBtn.className =
             "px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer bg-indigo-600 hover:bg-indigo-700 text-white";
-          startBtn.textContent = "เริ่มทำชุดนี้";
+          startBtn.textContent = prog.answered > 0 && !isCurrent ? "ทำต่อชุดนี้" : "เริ่มทำชุดนี้";
           startBtn.addEventListener("click", () => startQuizSet(setItem.id));
           actionsRow.appendChild(startBtn);
 
@@ -1699,8 +1858,11 @@
 
             optBtn.addEventListener("click", () => {
               state.userAnswers[qKey] = optKey;
+              saveCurrentProgressSnapshot();
               renderQuestions();
               updateHeaderStats();
+              renderUnitSelector();
+              renderSavedSetsBank();
             });
 
             optionsList.appendChild(optBtn);
@@ -1785,6 +1947,8 @@
         const fileList = event.target && event.target.files ? Array.from(event.target.files) : [];
         if (fileList.length === 0) return;
 
+        saveCurrentProgressSnapshot();
+
         let successCount = 0;
         const errors = [];
         let lastCreatedSet = null;
@@ -1814,9 +1978,7 @@
           state.activeSetId = lastCreatedSet.id;
           state.selectedUnitKey = parseUnitInfo(lastCreatedSet).unitKey;
           state.quizData = cloneData(lastCreatedSet.quiz);
-          state.userAnswers = {};
-          state.submitted = false;
-          state.showAllReview = false;
+          loadProgressForSet(lastCreatedSet.id);
           document.getElementById("set-name-input").value = lastCreatedSet.name;
           syncTextareaFromState();
           persistBankToStorage(state.savedSets, false);
@@ -1839,39 +2001,42 @@
 
       function toggleAnswersVisibility() {
         state.showAllReview = !state.showAllReview;
+        saveCurrentProgressSnapshot();
         renderQuestions();
         updateHeaderStats();
         showToast(state.showAllReview ? "แสดงเฉลยข้อที่ถูกต้องแล้ว" : "ซ่อนเฉลยแล้ว");
       }
 
+      function resetCurrentActiveSetOnly() {
+        const currentSet = findActiveSet();
+        const label = currentSet ? currentSet.name : state.quizData.title;
+        resetOnlyActiveSetProgress(state.activeSetId);
+        renderQuestions();
+        updateHeaderStats();
+        renderUnitSelector();
+        renderSavedSetsBank();
+        showToast(`ล้างคำตอบเฉพาะชุด "${label}" แล้ว (ชุดอื่นไม่เปลี่ยนแปลง)`);
+      }
+
       function bindEvents() {
         document.getElementById("btn-submit-quiz").addEventListener("click", () => {
           state.submitted = true;
+          saveCurrentProgressSnapshot();
           renderQuestions();
           updateHeaderStats();
+          renderUnitSelector();
+          renderSavedSetsBank();
           showToast("ตรวจคำตอบแล้ว (ยังไม่เฉลยข้อที่ถูก — กดปุ่มแสดงเฉลยเมื่อต้องการดูเฉลย)");
         });
 
         document.getElementById("btn-reveal-header").addEventListener("click", toggleAnswersVisibility);
         document.getElementById("btn-show-answers-bottom").addEventListener("click", toggleAnswersVisibility);
 
-        document.getElementById("btn-reset-quiz").addEventListener("click", () => {
-          state.userAnswers = {};
-          state.submitted = false;
-          state.showAllReview = false;
-          renderQuestions();
-          updateHeaderStats();
-          showToast("ล้างคำตอบทั้งหมดแล้ว พร้อมเริ่มทำใหม่");
-        });
+        document.getElementById("btn-reset-quiz").addEventListener("click", resetCurrentActiveSetOnly);
 
         document.getElementById("btn-retry-bottom").addEventListener("click", () => {
-          state.userAnswers = {};
-          state.submitted = false;
-          state.showAllReview = false;
-          renderQuestions();
-          updateHeaderStats();
+          resetCurrentActiveSetOnly();
           window.scrollTo({ top: 0, behavior: "smooth" });
-          showToast("เริ่มทำแบบทดสอบใหม่ได้เลย");
         });
 
         document.getElementById("btn-toggle-review").addEventListener("click", toggleAnswersVisibility);
@@ -1904,9 +2069,6 @@
             try {
               const validFromEditor = parseJsonFromEditor();
               hideJsonError();
-              state.userAnswers = {};
-              state.submitted = false;
-              state.showAllReview = false;
               saveAsNewSet(customName, validFromEditor);
               renderQuestions();
               return;
@@ -1926,9 +2088,6 @@
             try {
               const validFromEditor = parseJsonFromEditor();
               hideJsonError();
-              state.userAnswers = {};
-              state.submitted = false;
-              state.showAllReview = false;
               updateActiveSetInBank(customName, validFromEditor);
               renderQuestions();
               return;
@@ -1963,9 +2122,7 @@
             const validated = parseJsonFromEditor();
             hideJsonError();
             state.quizData = cloneData(validated);
-            state.userAnswers = {};
-            state.submitted = false;
-            state.showAllReview = false;
+            resetOnlyActiveSetProgress(state.activeSetId);
             renderQuestions();
             updateHeaderStats();
             showToast(`นำ JSON "${validated.title}" (${validated.questions.length} ข้อ) มาทำข้อสอบแล้ว`);
@@ -1980,9 +2137,6 @@
             const validated = parseJsonFromEditor();
             hideJsonError();
             const customName = document.getElementById("set-name-input").value;
-            state.userAnswers = {};
-            state.submitted = false;
-            state.showAllReview = false;
             saveAsNewSet(customName, validated);
             renderQuestions();
           } catch (err) {
